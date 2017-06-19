@@ -53,6 +53,13 @@ set(dso_SOURCE_FILES
   ${PROJECT_SOURCE_DIR}/src/util/settings.cpp
   ${PROJECT_SOURCE_DIR}/src/util/Undistort.cpp
   ${PROJECT_SOURCE_DIR}/src/util/globalCalib.cpp
+
+  ${PROJECT_SOURCE_DIR}/src/Initialization/iCommon.cpp
+  ${PROJECT_SOURCE_DIR}/src/Initialization/iEpipolarSolver.cpp
+  ${PROJECT_SOURCE_DIR}/src/Initialization/iFeatureExtractor.cpp
+  ${PROJECT_SOURCE_DIR}/src/Initialization/iRichFeatureMatcher.cpp
+  ${PROJECT_SOURCE_DIR}/src/Initialization/iFrame.cpp
+  ${PROJECT_SOURCE_DIR}/src/Initialization/Initializer.cpp
 )
 
 
@@ -81,21 +88,26 @@ else ()
 endif ()
 
 # decide if we have openCV
-if (OpenCV_FOUND)
+set(OpenCV_FOUND TRUE)
+file(GLOB OPENCV_LIBRARIES_MINE "/usr/local/Cellar/opencv3/HEAD-f109c01/lib/*")
+#if (OpenCV_FOUND)
 	message("--- found OpenCV, compiling dso_opencv library.")
-	include_directories( ${OpenCV_INCLUDE_DIRS} )
+#	include_directories( ${OpenCV_INCLUDE_DIRS} )
+	include_directories( /usr/local/Cellar/opencv3/HEAD-f109c01/include )
 	set(dso_opencv_SOURCE_FILES 
 	  ${PROJECT_SOURCE_DIR}/src/IOWrapper/OpenCV/ImageDisplay_OpenCV.cpp
-	  ${PROJECT_SOURCE_DIR}/src/IOWrapper/OpenCV/ImageRW_OpenCV.cpp)
+	  ${PROJECT_SOURCE_DIR}/src/IOWrapper/OpenCV/ImageRW_OpenCV.cpp src/Initialization/Initializer.cpp src/Initialization/Initializer.h src/Initialization/iFrame.cpp src/Initialization/iFrame.h src/Initialization/iFeatureExtractor.cpp src/Initialization/iFeatureExtractor.h src/Initialization/iCommon.cpp src/Initialization/iCommon.h src/Initialization/iEpipolarSolver.cpp src/Initialization/iEpipolarSolver.h src/Initialization/iFeatureMatcher.h src/Initialization/iRichFeatureMatcher.cpp src/Initialization/iRichFeatureMatcher.h)
 	set(HAS_OPENCV 1)
-else ()
-	message("--- could not find OpenCV, not compiling dso_opencv library.")
-	message("    this means there will be no image display, and image read / load functionality.")
-	set(dso_opencv_SOURCE_FILES 
-	  ${PROJECT_SOURCE_DIR}/src/IOWrapper/ImageDisplay_dummy.cpp
-	  ${PROJECT_SOURCE_DIR}/src/IOWrapper/ImageRW_dummy.cpp)
-	set(HAS_OPENCV 0)
-endif ()
+
+
+#else ()
+#	message("--- could not find OpenCV, not compiling dso_opencv library.")
+#	message("    this means there will be no image display, and image read / load functionality.")
+#	set(dso_opencv_SOURCE_FILES 
+#	  ${PROJECT_SOURCE_DIR}/src/IOWrapper/ImageDisplay_dummy.cpp
+#	  ${PROJECT_SOURCE_DIR}/src/IOWrapper/ImageRW_dummy.cpp)
+#	set(HAS_OPENCV 0)
+#endif ()
 
 # decide if we have ziplib.
 if (LIBZIP_LIBRARY)
@@ -114,13 +126,20 @@ add_library(dso ${dso_SOURCE_FILES} ${dso_opencv_SOURCE_FILES} ${dso_pangolin_SO
 
 #set_property( TARGET dso APPEND_STRING PROPERTY COMPILE_FLAGS -Wall )
 
+include_directories( /usr/local/Cellar/boost/1.63.0/include )
+file(GLOB BOOST_LIBRARIES_MINE "/usr/local/Cellar/boost/1.63.0/lib/*" ) 
+
+include_directories( /usr/local/Cellar/suite-sparse/4.5.4/include/ )
+file(GLOB SUITESPARSE_LIBRARIES_MINE "/usr/local/Cellar/suite-sparse/4.5.4/lib/*" ) 
 
 # build main executable (only if we have both OpenCV and Pangolin)
 if (OpenCV_FOUND AND Pangolin_FOUND)
 	message("--- compiling dso_dataset.")
 	add_executable(dso_dataset ${PROJECT_SOURCE_DIR}/src/main_dso_pangolin.cpp )
-    target_link_libraries(dso_dataset dso boost_system boost_thread cxsparse ${LIBZIP_LIBRARY} ${Pangolin_LIBRARIES} ${OpenCV_LIBS})
+    #target_link_libraries(dso_dataset dso boost_system boost_thread cxsparse ${LIBZIP_LIBRARY} ${OPENCV_LIBRARIES_MINE} ${Pangolin_LIBRARIES} ${OpenCV_LIBS})
+    target_link_libraries(dso_dataset dso ${BOOST_LIBRARIES_MINE} ${SUITESPARSE_LIBRARIES_MINE} ${LIBZIP_LIBRARY} ${OPENCV_LIBRARIES_MINE} ${Pangolin_LIBRARIES} ${OpenCV_LIBS})
 else()
 	message("--- not building dso_dataset, since either don't have openCV or Pangolin.")
 endif()
+
 

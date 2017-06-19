@@ -338,6 +338,7 @@ Vec3f CoarseInitializer::calcResAndGS(
 
 	Mat33f RKi = (refToNew.rotationMatrix() * Ki[lvl]).cast<float>();
 	Vec3f t = refToNew.translation().cast<float>();
+
 	Eigen::Vector2f r2new_aff = Eigen::Vector2f(exp(refToNew_aff.a), refToNew_aff.b);
 
 	float fxl = fx[lvl];
@@ -574,6 +575,7 @@ Vec3f CoarseInitializer::calcResAndGS(
 	H_out(2,2) += alphaOpt*npts;
 
 	Vec3f tlog = refToNew.log().head<3>().cast<float>();
+	//std::cout << "..............refToNew:" << refToNew.matrix() << std::endl;
 	b_out[0] += tlog[0]*alphaOpt*npts;
 	b_out[1] += tlog[1]*alphaOpt*npts;
 	b_out[2] += tlog[2]*alphaOpt*npts;

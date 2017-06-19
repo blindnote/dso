@@ -167,7 +167,6 @@ namespace dso
 
 
 
-
 		int wh = hG[0]*wG[0];
 		for(unsigned int f=0;f<frameHessians.size();f++)
 		{
@@ -175,7 +174,6 @@ namespace dso
 			images.push_back(img);
 			//float* fd = frameHessians[f]->I;
 			Eigen::Vector3f* fd = frameHessians[f]->dI;
-
 
 			for(int i=0;i<wh;i++)
 			{
@@ -316,7 +314,6 @@ namespace dso
 
 		for(unsigned int i=0;i<images.size();i++)
 			delete images[i];
-
 
 
 		if((debugSaveImages&&false))

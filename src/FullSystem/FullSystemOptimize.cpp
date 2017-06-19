@@ -589,6 +589,7 @@ float FullSystem::optimize(int mnumOptIts)
 		{
 			fh->shell->camToWorld = fh->PRE_camToWorld;
 			fh->shell->aff_g2l = fh->aff_g2l();
+			//std::cout << "........................"  <<  fh->shell->camToWorld.translation().transpose()  << std::endl;
 		}
 	}
 
@@ -633,6 +634,7 @@ void FullSystem::removeOutliers()
 	int numPointsDropped=0;
 	for(FrameHessian* fh : frameHessians)
 	{
+		std::cout << "................. fh->pointHessians.size():" << fh->pointHessians.size() << std::endl;
 		for(unsigned int i=0;i<fh->pointHessians.size();i++)
 		{
 			PointHessian* ph = fh->pointHessians[i];

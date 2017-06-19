@@ -204,6 +204,50 @@ public:
 		return files.size();
 	}
 
+    std::string getImageName(int id)
+    {
+        return files.size() > id ? files[id] : "";
+    }
+
+    cv::Mat getImageForSfm(int id)
+    {
+        if(!isZipped)
+        {
+            // CHANGE FOR ZIP FILE
+            cv::Mat m = cv::imread(files[id], CV_LOAD_IMAGE_GRAYSCALE);
+            return m.clone();
+        }
+        else
+        {
+#if HAS_ZIPLIB
+            if(databuffer==0) databuffer = new char[widthOrg*heightOrg*6+10000];
+            zip_file_t* fle = zip_fopen(ziparchive, files[id].c_str(), 0);
+            long readbytes = zip_fread(fle, databuffer, (long)widthOrg*heightOrg*6+10000);
+
+            if(readbytes > (long)widthOrg*heightOrg*6)
+            {
+                printf("read %ld/%ld bytes for file %s. increase buffer!!\n", readbytes,(long)widthOrg*heightOrg*6+10000, files[id].c_str());
+                delete[] databuffer;
+                databuffer = new char[(long)widthOrg*heightOrg*30];
+                fle = zip_fopen(ziparchive, files[id].c_str(), 0);
+                readbytes = zip_fread(fle, databuffer, (long)widthOrg*heightOrg*30+10000);
+
+                if(readbytes > (long)widthOrg*heightOrg*30)
+                {
+                    printf("buffer still to small (read %ld/%ld). abort.\n", readbytes,(long)widthOrg*heightOrg*30+10000);
+                    exit(1);
+                }
+            }
+
+            cv::Mat m = cv::imdecode(cv::Mat(readbytes,1,CV_8U, databuffer), CV_LOAD_IMAGE_GRAYSCALE);
+            return m.clone();
+#else
+            printf("ERROR: cannot read .zip archive, as compile without ziplib!\n");
+			exit(1);
+#endif
+        }
+    }
+
 	double getTimestamp(int id)
 	{
 		if(timestamps.size()==0) return id*0.1f;

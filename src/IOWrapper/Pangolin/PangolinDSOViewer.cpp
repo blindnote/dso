@@ -96,6 +96,7 @@ void PangolinDSOViewer::run()
 
 	pangolin::View& Visualization3D_display = pangolin::CreateDisplay()
 		.SetBounds(0.0, 1.0, pangolin::Attach::Pix(UI_WIDTH), 1.0, -w/(float)h)
+		//.SetBounds(0.0, 1.0, 0.0, 1.0, -w/(float)h)
 		.SetHandler(new pangolin::Handler3D(Visualization3D_camera));
 
 
@@ -116,12 +117,14 @@ void PangolinDSOViewer::run()
 
     pangolin::CreateDisplay()
 		  .SetBounds(0.0, 0.3, pangolin::Attach::Pix(UI_WIDTH), 1.0)
+		//	.SetBounds(0.0, 0.3, 0.0, 1.0)
 		  .SetLayout(pangolin::LayoutEqual)
-		  .AddDisplay(d_kfDepth)
 		  .AddDisplay(d_video)
+		  .AddDisplay(d_kfDepth)
 		  .AddDisplay(d_residual);
 
 	// parameter reconfigure gui
+
 	pangolin::CreatePanel("ui").SetBounds(0.0, 1.0, 0.0, pangolin::Attach::Pix(UI_WIDTH));
 
 	pangolin::Var<int> settings_pointCloudMode("ui.PC_mode",1,1,4,false);
@@ -135,9 +138,11 @@ void PangolinDSOViewer::run()
 
 
 	pangolin::Var<bool> settings_show3D("ui.show3D",true,true);
-	pangolin::Var<bool> settings_showLiveDepth("ui.showDepth",true,true);
+  	pangolin::Var<bool> settings_showLiveDepth("ui.showDepth",true,true);
+  //  pangolin::Var<bool> settings_showLiveDepth("ui.showDepth",false,false);
 	pangolin::Var<bool> settings_showLiveVideo("ui.showVideo",true,true);
-    pangolin::Var<bool> settings_showLiveResidual("ui.showResidual",false,true);
+    pangolin::Var<bool> settings_showLiveResidual("ui.showResidual",true,true);
+//	pangolin::Var<bool> settings_showLiveResidual("ui.showResidual",false,false);
 
 	pangolin::Var<bool> settings_showFramesWindow("ui.showFramesWindow",false,true);
 	pangolin::Var<bool> settings_showFullTracking("ui.showFullTracking",false,true);
@@ -163,11 +168,13 @@ void PangolinDSOViewer::run()
 	pangolin::Var<double> settings_mapFps("ui.KF fps",0,0,0,false);
 
 
+
 	// Default hooks for exiting (Esc) and fullscreen (tab).
 	while( !pangolin::ShouldQuit() && running )
 	{
 		// Clear entire screen
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+		//glClearColor(255, 255, 255, 0.0);
 
 		if(setting_render_display3D)
 		{

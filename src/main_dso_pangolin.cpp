@@ -30,6 +30,8 @@
 #include <stdio.h>
 #include <unistd.h>
 
+#include <opencv2/highgui/highgui.hpp>
+
 #include "IOWrapper/Output3DWrapper.h"
 #include "IOWrapper/ImageDisplay.h"
 
@@ -389,8 +391,27 @@ int main( int argc, char** argv )
 	}
 
 
+	std::vector<cv::Mat> sfmInitImages;
+	std::vector<std::string> sfmInitImageNames;
+	for(int i = 0; i >= 0 && i < lstart; i++)
+	{
+		sfmInitImageNames.push_back(reader->getImageName(i));
+//		MinimalImageB* img = reader->getImageRaw(i);
+//
+//		int w = reader->undistort->getSize()[0];
+//		int h = reader->undistort->getSize()[1];
+//      cv::Mat cvImage(h, w, CV_8UC);
+//		memcpy(cvImage.data, img->data, sizeof(unsigned char)*w*h);
+
+//      cv::Mat cvImage = reader->getImageForSfm(i);
+//		cv::imshow("huhaha" , cvImage);
+//		cv::waitKey(0);
+		sfmInitImages.push_back(reader->getImageForSfm(i));
+	}
+
 
 	FullSystem* fullSystem = new FullSystem();
+	//fullSystem->setSfmInitializer(reader->undistort->getK(), sfmInitImageNames, sfmInitImages);
 	fullSystem->setGammaFunction(reader->getPhotometricGamma());
 	fullSystem->linearizeOperation = (playbackSpeed==0);
 
@@ -417,6 +438,17 @@ int main( int argc, char** argv )
 
     // to make MacOS happy: run this in dedicated thread -- and use this one to run the GUI.
     std::thread runthread([&]() {
+		  fullSystem->setSfmInitializer(reader->undistort->getK(), sfmInitImageNames, sfmInitImages);
+		  if (fullSystem->GetFirstFrameIndex() != -1 &&
+			  fullSystem->GetSecondFrameIndex() != -1)
+		  {
+			  ImageAndExposure *sfmInitImg1 = reader->getImage(fullSystem->GetFirstFrameIndex());
+			  fullSystem->addSfmInitFrame(sfmInitImg1, fullSystem->GetFirstFrameIndex(), true);
+			  ImageAndExposure *sfmInitImg2 = reader->getImage(fullSystem->GetSecondFrameIndex());
+			  fullSystem->addSfmInitFrame(sfmInitImg2, fullSystem->GetSecondFrameIndex(), false);
+		  }
+
+
         std::vector<int> idsToPlay;
         std::vector<double> timesToPlayAt;
         for(int i=lstart;i>= 0 && i< reader->getNumImages() && linc*i < linc*lend;i+=linc)
@@ -508,6 +540,7 @@ int main( int argc, char** argv )
                     for(IOWrap::Output3DWrapper* ow : wraps) ow->reset();
 
                     fullSystem = new FullSystem();
+                    fullSystem->setSfmInitializer(reader->undistort->getK(), sfmInitImageNames, sfmInitImages);
                     fullSystem->setGammaFunction(reader->getPhotometricGamma());
                     fullSystem->linearizeOperation = (playbackSpeed==0);
 
@@ -562,7 +595,6 @@ int main( int argc, char** argv )
         }
 
     });
-
 
     if(viewer != 0)
         viewer->run();

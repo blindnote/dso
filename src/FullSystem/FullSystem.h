@@ -39,6 +39,8 @@
 #include "util/IndexThreadReduce.h"
 #include "OptimizationBackend/EnergyFunctional.h"
 #include "FullSystem/PixelSelector2.h"
+#include "Initialization/Initializer.h"
+#include "Initialization/iEpipolarSolver.h"
 
 #include <math.h>
 
@@ -161,6 +163,12 @@ public:
 
 	void setGammaFunction(float* BInv);
 	void setOriginalCalib(const VecXf &originalCalib, int originalW, int originalH);
+	void setSfmInitializer(const Mat33& k,
+                          const std::vector<std::string>& imageNames,
+                          const std::vector<cv::Mat>& images);
+	void addSfmInitFrame(ImageAndExposure* image, int id, bool first);
+	int GetFirstFrameIndex() { return mpSfmInitializer->GetFirstViewIndex(); }
+	int GetSecondFrameIndex() { return mpSfmInitializer->GetSecondViewIndex(); }
 
 private:
 
@@ -184,6 +192,7 @@ private:
 	void flagPointsForRemoval();
 	void makeNewTraces(FrameHessian* newFrame, float* gtDepth);
 	void initializeFromInitializer(FrameHessian* newFrame);
+    void initializeFromSfm(FrameHessian* newFrame, std::vector<InvDepthPnt>& idpts);
 	void flagFramesForMarginalization(FrameHessian* newFH);
 
 
@@ -246,15 +255,19 @@ private:
 	float statistics_lastFineTrackRMSE;
 
 
-
-
-
+	// ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+	FrameHessian* initFirstFrame;
+	FrameHessian* initNewFrame;
+	SE3 initThisToNext;
 
 
 	// =================== changed by tracker-thread. protected by trackMutex ============
 	boost::mutex trackMutex;
 	std::vector<FrameShell*> allFrameHistory;
 	CoarseInitializer* coarseInitializer;
+	std::shared_ptr<iEpipolarSolver> mpEpipolarSolver;
+	std::shared_ptr<Initializer> mpSfmInitializer;
+    std::vector<CloudPoint> mVecSfmPointCloud;
 	Vec5 lastCoarseRMSE;
 
 

@@ -87,6 +87,19 @@ public:
 
 	PhotometricUndistorter* photometricUndist;
 
+//	inline const Mat33 getOrgK()
+//	{
+//		Mat33 originalK;
+//		originalK.setIdentity();
+//
+//		originalK(0,0) = parsOrg[0];
+//		originalK(1,1) = parsOrg[1];
+//		originalK(0,2) = parsOrg[2];
+//		originalK(1,2) = parsOrg[3];
+//
+//		return originalK;
+//	}
+
 protected:
     int w, h, wOrg, hOrg, wUp, hUp;
     int upsampleUndistFactor;

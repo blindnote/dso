@@ -918,17 +918,16 @@ void EnergyFunctional::makeIDX()
 
 	allPoints.clear();
 
-	for(EFFrame* f : frames)
-		for(EFPoint* p : f->points)
-		{
+	for(EFFrame* f : frames) {
+		//std::cout << "..............f->points.size():" << f->points.size() << std::endl;
+		for (EFPoint *p : f->points) {
 			allPoints.push_back(p);
-			for(EFResidual* r : p->residualsAll)
-			{
+			for (EFResidual *r : p->residualsAll) {
 				r->hostIDX = r->host->idx;
 				r->targetIDX = r->target->idx;
 			}
 		}
-
+	}
 
 	EFIndicesValid=true;
 }

@@ -173,6 +173,10 @@ FullSystem::FullSystem()
 	maxIdJetVisDebug = -1;
 	minIdJetVisTracker = -1;
 	maxIdJetVisTracker = -1;
+
+	initFirstFrame = nullptr;
+	initNewFrame = nullptr;
+	initThisToNext = SE3();
 }
 
 FullSystem::~FullSystem()
@@ -212,6 +216,18 @@ void FullSystem::setOriginalCalib(const VecXf &originalCalib, int originalW, int
 {
 
 }
+
+void FullSystem::setSfmInitializer(const Mat33& k,
+                                  const std::vector<std::string>& imageNames,
+                                  const std::vector<cv::Mat>& images)
+{
+	mpEpipolarSolver = std::make_shared<iEpipolarSolver>(k);
+	mpSfmInitializer = std::make_shared<Initializer>(images, imageNames, mpEpipolarSolver, mVecSfmPointCloud);
+
+	// use sfm init
+	mpSfmInitializer->RecoverDepth();
+}
+
 
 void FullSystem::setGammaFunction(float* BInv)
 {
@@ -798,6 +814,154 @@ void FullSystem::flagPointsForRemoval()
 
 }
 
+void FullSystem::addSfmInitFrame(ImageAndExposure* image, int id, bool first)
+{
+	if(isLost) return;
+	boost::unique_lock<boost::mutex> lock(trackMutex);
+
+
+	// =========================== add into allFrameHistory =========================
+	FrameHessian* fh = new FrameHessian();
+	FrameShell* shell = new FrameShell();
+	shell->camToWorld = SE3(); 		// no lock required, as fh is not used anywhere yet.
+	shell->aff_g2l = AffLight(0,0);
+	shell->marginalizedAt = shell->id = allFrameHistory.size();
+	shell->timestamp = image->timestamp;
+	shell->incoming_id = id;
+	fh->shell = shell;
+	allFrameHistory.push_back(shell);
+
+
+	// =========================== make Images / derivatives etc. =========================
+	fh->ab_exposure = image->exposure_time;
+	fh->makeImages(image->image, &Hcalib);
+
+
+	if(!initialized)	// first frame set. fh is kept by coarseInitializer.
+	{
+		if (first)
+		{
+			//coarseInitializer->setFirst(&Hcalib, fh);
+            initFirstFrame = fh;
+            return;
+		}
+		else /*if (coarseInitializer->trackFrame(fh, outputWrapper))*/
+		{
+            initNewFrame = fh;
+
+			for(IOWrap::Output3DWrapper* ow : outputWrapper)
+				ow->pushLiveFrame(initNewFrame);
+
+
+            std::vector<InvDepthPnt> idpts;
+            mpSfmInitializer->BuildInitialSceneForDso(idpts, initThisToNext);
+
+            shell->camToWorld = initThisToNext.inverse();
+
+            initializeFromSfm(fh, idpts);
+			lock.unlock();
+			deliverTrackedFrame(fh, true);
+		}
+	}
+	else
+	{
+		// if still initializing
+		fh->shell->poseValid = false;
+		delete fh;
+	}
+
+	return;
+}
+
+void FullSystem::initializeFromSfm(FrameHessian *newFrame, std::vector<InvDepthPnt>& idpts)
+{
+    boost::unique_lock<boost::mutex> lock(mapMutex);
+
+    // add firstframe.
+    FrameHessian* firstFrame = initFirstFrame;
+    firstFrame->idx = frameHessians.size();
+    frameHessians.push_back(firstFrame);
+    firstFrame->frameID = allKeyFramesHistory.size();
+    allKeyFramesHistory.push_back(firstFrame->shell);
+    ef->insertFrame(firstFrame, &Hcalib);
+    setPrecalcValues();
+
+
+    firstFrame->pointHessians.reserve(wG[0]*hG[0]*0.2f);
+    firstFrame->pointHessiansMarginalized.reserve(wG[0]*hG[0]*0.2f);
+    firstFrame->pointHessiansOut.reserve(wG[0]*hG[0]*0.2f);
+
+
+//    float sumID=1e-5, numID=1e-5;
+//    for(int i=0;i<coarseInitializer->numPoints[0];i++)
+//    {
+//        sumID += coarseInitializer->points[0][i].iR;
+//        numID++;
+//    }
+//    float rescaleFactor = 1 / (sumID / numID);
+    float rescaleFactor = 1.21;
+
+    // randomly sub-select the points I need.
+    // float keepPercentage = setting_desiredPointDensity / coarseInitializer->numPoints[0];
+    float keepPercentage = setting_desiredPointDensity / idpts.size();
+
+    if(!setting_debugout_runquiet)
+        printf("Initialization: keep %.1f%% (need %d, have %d)!\n", 100*keepPercentage,
+               (int)(setting_desiredPointDensity), idpts.size() );
+
+    //for(int i=0;i<coarseInitializer->numPoints[0];i++)
+    for(int i=0;i<idpts.size();i++)
+    {
+        if(rand()/(float)RAND_MAX > keepPercentage) continue;
+
+        //Pnt* point = coarseInitializer->points[0]+i;
+        InvDepthPnt pnt = idpts[i];
+        //ImmaturePoint* pt = new ImmaturePoint(point->u+0.5f,point->v+0.5f,firstFrame,point->my_type, &Hcalib);
+        ImmaturePoint* pt = new ImmaturePoint(pnt.u+0.5f,pnt.v+0.5f,firstFrame,1.0, &Hcalib);
+
+        if(!std::isfinite(pt->energyTH)) { delete pt; continue; }
+
+
+        pt->idepth_max=pt->idepth_min=1;
+        PointHessian* ph = new PointHessian(pt, &Hcalib);
+        delete pt;
+        if(!std::isfinite(ph->energyTH)) {delete ph; continue;}
+
+        //ph->setIdepthScaled(point->iR*rescaleFactor);
+        ph->setIdepthScaled(pnt.idepth*rescaleFactor);
+        ph->setIdepthZero(ph->idepth);
+        ph->hasDepthPrior=true;
+        ph->setPointStatus(PointHessian::ACTIVE);
+
+        firstFrame->pointHessians.push_back(ph);
+        ef->insertPoint(ph);
+    }
+
+    SE3 firstToNew = mpSfmInitializer->GetSecondFramePose();
+    firstToNew.translation() /= rescaleFactor;
+
+
+    // really no lock required, as we are initializing.
+    {
+        boost::unique_lock<boost::mutex> crlock(shellPoseMutex);
+        firstFrame->shell->camToWorld = SE3();
+        firstFrame->shell->aff_g2l = AffLight(0,0);
+        firstFrame->setEvalPT_scaled(firstFrame->shell->camToWorld.inverse(),firstFrame->shell->aff_g2l);
+        firstFrame->shell->trackingRef=0;
+        firstFrame->shell->camToTrackingRef = SE3();
+
+        newFrame->shell->camToWorld = firstToNew.inverse();
+        newFrame->shell->aff_g2l = AffLight(0,0);
+        newFrame->setEvalPT_scaled(newFrame->shell->camToWorld.inverse(),newFrame->shell->aff_g2l);
+        newFrame->shell->trackingRef = firstFrame->shell;
+        newFrame->shell->camToTrackingRef = firstToNew.inverse();
+
+    }
+
+    initialized=true;
+    printf("INITIALIZE FROM INITIALIZER (%d pts)!\n", (int)firstFrame->pointHessians.size());
+}
+
 
 void FullSystem::addActiveFrame( ImageAndExposure* image, int id )
 {
@@ -830,12 +994,10 @@ void FullSystem::addActiveFrame( ImageAndExposure* image, int id )
 		// use initializer!
 		if(coarseInitializer->frameID<0)	// first frame set. fh is kept by coarseInitializer.
 		{
-
 			coarseInitializer->setFirst(&Hcalib, fh);
 		}
 		else if(coarseInitializer->trackFrame(fh, outputWrapper))	// if SNAPPED
 		{
-
 			initializeFromInitializer(fh);
 			lock.unlock();
 			deliverTrackedFrame(fh, true);
@@ -846,10 +1008,12 @@ void FullSystem::addActiveFrame( ImageAndExposure* image, int id )
 			fh->shell->poseValid = false;
 			delete fh;
 		}
+
 		return;
 	}
 	else	// do front-end operation.
 	{
+
 		// =========================== SWAP tracking reference?. =========================
 		if(coarseTracker_forNewKF->refFrameID > coarseTracker->refFrameID)
 		{
@@ -903,8 +1067,6 @@ void FullSystem::addActiveFrame( ImageAndExposure* image, int id )
 }
 void FullSystem::deliverTrackedFrame(FrameHessian* fh, bool needKF)
 {
-
-
 	if(linearizeOperation)
 	{
 		if(goStepByStep && lastRefStopID != coarseTracker->refFrameID)
@@ -1104,26 +1266,34 @@ void FullSystem::makeKeyFrame( FrameHessian* fh)
 
 
 	// =========================== Figure Out if INITIALIZATION FAILED =========================
+	std::cout << "................. allKeyFramesHistory.size():" << allKeyFramesHistory.size() << std::endl;
 	if(allKeyFramesHistory.size() <= 4)
 	{
+		std::cout << "........ rmse:" << rmse << std::endl;
 		if(allKeyFramesHistory.size()==2 && rmse > 20*benchmark_initializerSlackFactor)
 		{
+			printf("......2.....\n");
 			printf("I THINK INITIALIZATINO FAILED! Resetting.\n");
 			initFailed=true;
 		}
 		if(allKeyFramesHistory.size()==3 && rmse > 13*benchmark_initializerSlackFactor)
 		{
+			printf("......3.....\n");
 			printf("I THINK INITIALIZATINO FAILED! Resetting.\n");
 			initFailed=true;
 		}
 		if(allKeyFramesHistory.size()==4 && rmse > 9*benchmark_initializerSlackFactor)
 		{
+			printf("......4.....\n");
 			printf("I THINK INITIALIZATINO FAILED! Resetting.\n");
 			initFailed=true;
 		}
 	}
 
-
+    if (!initFailed)
+    {
+        printf("......^ _ ^......\n");
+    }
 
     if(isLost) return;
 
@@ -1142,16 +1312,11 @@ void FullSystem::makeKeyFrame( FrameHessian* fh)
 		coarseTracker_forNewKF->setCoarseTrackingRef(frameHessians);
 
 
-
         coarseTracker_forNewKF->debugPlotIDepthMap(&minIdJetVisTracker, &maxIdJetVisTracker, outputWrapper);
         coarseTracker_forNewKF->debugPlotIDepthMapFloat(outputWrapper);
 	}
 
-
 	debugPlot("post Optimize");
-
-
-
 
 
 
@@ -1183,7 +1348,6 @@ void FullSystem::makeKeyFrame( FrameHessian* fh)
 
 
 	// =========================== Marginalize Frames =========================
-
 	for(unsigned int i=0;i<frameHessians.size();i++)
 		if(frameHessians[i]->flaggedForMarginalization)
 			{marginalizeFrame(frameHessians[i]); i=0;}
@@ -1224,6 +1388,7 @@ void FullSystem::initializeFromInitializer(FrameHessian* newFrame)
 		numID++;
 	}
 	float rescaleFactor = 1 / (sumID / numID);
+	std::cout << "................. rescaleFactor:" << rescaleFactor << std::endl;
 
 	// randomly sub-select the points I need.
 	float keepPercentage = setting_desiredPointDensity / coarseInitializer->numPoints[0];
@@ -1257,8 +1422,8 @@ void FullSystem::initializeFromInitializer(FrameHessian* newFrame)
 	}
 
 
-
-	SE3 firstToNew = coarseInitializer->thisToNext;
+ 	SE3 firstToNew = coarseInitializer->thisToNext;
+	//SE3 firstToNew = mpSfmInitializer->GetSecondFramePose();
 	firstToNew.translation() /= rescaleFactor;
 
 
@@ -1272,6 +1437,7 @@ void FullSystem::initializeFromInitializer(FrameHessian* newFrame)
 		firstFrame->shell->camToTrackingRef = SE3();
 
 		newFrame->shell->camToWorld = firstToNew.inverse();
+		//newFrame->shell->camToWorld = mpSfmInitializer->GetSecondFramePose().inverse();
 		newFrame->shell->aff_g2l = AffLight(0,0);
 		newFrame->setEvalPT_scaled(newFrame->shell->camToWorld.inverse(),newFrame->shell->aff_g2l);
 		newFrame->shell->trackingRef = firstFrame->shell;
