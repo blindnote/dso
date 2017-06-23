@@ -543,6 +543,7 @@ bool CoarseTracker::trackNewestCoarse(
 	debugPlot = setting_render_displayCoarseTrackingFull;
 	debugPrint = false;
 
+	std::cout << "........... coarsestLvl:" << coarsestLvl << std::endl;
 	assert(coarsestLvl < 5 && coarsestLvl < pyrLevelsUsed);
 
 	lastResiduals.setConstant(NAN);
@@ -735,6 +736,8 @@ void CoarseTracker::debugPlotIDepthMap(float* minID_pt, float* maxID_pt, std::ve
 		}
 		std::sort(allID.begin(), allID.end());
 		int n = allID.size()-1;
+		//std::cout <<  ".......... n:" << n << std::endl;
+		if (n < 0) return;
 
 		float minID_new = allID[(int)(n*0.05)];
 		float maxID_new = allID[(int)(n*0.95)];

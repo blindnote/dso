@@ -947,6 +947,8 @@ void CoarseInitializer::makeK(CalibHessian* HCalib)
 		fy[level] = fy[level-1] * 0.5;
 		cx[level] = (cx[0] + 0.5) / ((int)1<<level) - 0.5;
 		cy[level] = (cy[0] + 0.5) / ((int)1<<level) - 0.5;
+		//cx[level] = (cx[0] ) / ((int)1<<level) ;
+		//cy[level] = (cy[0] ) / ((int)1<<level) ;
 	}
 
 	for (int level = 0; level < pyrLevelsUsed; ++ level)

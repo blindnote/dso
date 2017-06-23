@@ -40,6 +40,9 @@ ImmaturePoint:: ImmaturePoint(int u_, int v_, FrameHessian* host_, float type, C
 		int dx = patternP[idx][0];
 		int dy = patternP[idx][1];
 
+		if (u+dx >= wG[0] || v+dy >= hG[0])
+			continue;
+
         Vec3f ptc = getInterpolatedElement33BiLin(host->dI, u+dx, v+dy,wG[0]);
 
 

@@ -46,7 +46,7 @@ public:
     inline int GetFirstViewIndex() { return miFirstViewIndex; }
     inline int GetSecondViewIndex() { return miSecondViewIndex; }
 
-    void BuildInitialSceneForDso(std::vector<InvDepthPnt>& idpts, Sophus::SE3d thisToNext);
+    void BuildInitialSceneForDso(std::vector<InvDepthPnt>& idpts, Sophus::SE3d& thisToNext);
 
 private:
     void MatchFeatures();       // brute-force
@@ -54,9 +54,11 @@ private:
                               const std::vector<cv::KeyPoint>& right,
                               const std::vector<cv::DMatch>& matches);
     std::map<float, ImagePair> sortViewsForBaseline();
+    //std::map<float, ImagePair, std::greater<float>> sortViewsForBaseline();
 
     void MatchFeatures2();       // flann
     void ConstructBaseLine();
+    void ConstructBaseLineSpecify();
     void EnrichScene();
 
     void Find3d2dCorrespondences(int curr_view_index,
@@ -77,8 +79,11 @@ private:
                             std::vector<CloudPoint>& new_cloud_filtered);
 
     void SaveCloudAndCamerasToPLY(const std::string& prefix);
+    void SaveCamerasInvToPLY(const std::string& prefix);
 
     Sophus::SE3d GetNthFramePose(int id);
+    Sophus::SE3d GetSE3From3x4Mat(const cv::Matx34d& pose);
+    cv::Matx34d GetInvFromSophusPose(const Sophus::SE3d& pose_se3);
 
 
 private:
@@ -88,7 +93,7 @@ private:
     std::vector<std::vector<cv::KeyPoint>> mKeyPointsVec;
     std::map<std::pair<int, int>, std::vector<cv::DMatch>> mMatchesTable;
 
-    std::map<int, cv::Matx34d> Pmats;   // left->right
+    std::map<int, cv::Matx34d> Pmats;   // right->left OR camToWorld
     std::vector<int> mDoneViewsIdxVec;
     std::vector<CloudPoint>& mCloud;
 

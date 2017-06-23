@@ -12,6 +12,10 @@ iEpipolarSolver::iEpipolarSolver(const Eigen::Matrix<double,3,3>& k)
   mK = (cv::Mat_<double>(3,3) << k(0, 0), k(0, 1), k(0, 2),
           k(1, 0), k(1, 1), k(1, 2),
           k(2, 0), k(2, 1), k(2, 2));
+
+//  mK = (cv::Mat_<double>(3, 3) << 685.720714, 0.0, 630.858138,
+//                                  0.0,  685.636463, 511.918472,
+//                                  0.0, 0.0, 1.0);
   mDistortionCoeffs = cv::Mat_<double>::zeros(1,4);
 
   std::cout << std::endl << "K:" << std::endl << mK << std::endl;

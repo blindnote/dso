@@ -702,6 +702,8 @@ void Undistort::makeOptimalK_crop()
 
 	K(0,0) = ((float)w-1.0f)/(maxX-minX);
 	K(1,1) = ((float)h-1.0f)/(maxY-minY);
+	//K(0,0) = ((float)w)/(maxX-minX);
+	//K(1,1) = ((float)h)/(maxY-minY);
 	K(0,2) = -minX*K(0,0);
 	K(1,2) = -minY*K(1,1);
 
@@ -801,8 +803,10 @@ void Undistort::readFromFile(const char* configFileName, int nPars, std::string 
         // [-0.5,-0.5]-[0.5,0.5]. Thus, the shift by -0.5.
         parsOrg[0] = parsOrg[0] * wOrg;
         parsOrg[1] = parsOrg[1] * hOrg;
-        parsOrg[2] = parsOrg[2] * wOrg - 0.5;
-        parsOrg[3] = parsOrg[3] * hOrg - 0.5;
+       // parsOrg[2] = parsOrg[2] * wOrg - 0.5;
+       // parsOrg[3] = parsOrg[3] * hOrg - 0.5;
+		parsOrg[2] = parsOrg[2] * wOrg;
+		parsOrg[3] = parsOrg[3] * hOrg;
     }
 
 

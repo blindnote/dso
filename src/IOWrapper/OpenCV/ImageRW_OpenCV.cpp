@@ -89,6 +89,7 @@ MinimalImage<unsigned short>* readImageBW_16U(std::string filename)
 MinimalImageB* readStreamBW_8U(char* data, int numBytes)
 {
 	cv::Mat m = cv::imdecode(cv::Mat(numBytes,1,CV_8U, data), CV_LOAD_IMAGE_GRAYSCALE);
+    //printf(">>>>>>>> m.rows:%d, m.cols:%d, m.type():%d, m.channels():%d\n", m.rows, m.cols, m.type(), m.channels());
 	if(m.rows*m.cols==0)
 	{
 		printf("cv::imdecode could not read stream (%d bytes)! this may segfault. \n", numBytes);

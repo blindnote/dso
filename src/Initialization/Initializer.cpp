@@ -36,11 +36,12 @@ bool Initializer::RecoverDepth()
 {
     this->MatchFeatures();
 
-    std::cout << "======================================================================\n";
+    std::cout << "\n======================================================================\n";
     std::cout << "======================== Depth Recovery Start ========================\n";
-    std::cout << "======================================================================\n";
+    std::cout << "======================================================================\n\n";
 
     this->ConstructBaseLine();
+    //this->ConstructBaseLineSpecify();
     this->EnrichScene();
 
     std::cout << "\n======================================================================\n";
@@ -48,6 +49,7 @@ bool Initializer::RecoverDepth()
     std::cout << "======================================================================\n\n";
 
     SaveCloudAndCamerasToPLY("/Users/yinr/ComputerVision/dataset/calib_narrowGamma_scene2/sfm");
+    //SaveCamerasInvToPLY("/Users/yinr/ComputerVision/dataset/calib_narrowGamma_scene2/sfm_inv");
 
     std::cout << "******************* Finally got:" << mCloud.size() << std::endl << std::endl;
 
@@ -71,7 +73,7 @@ Sophus::SE3d Initializer::GetSecondFramePose()
 }
 
 
-void Initializer::BuildInitialSceneForDso(std::vector<InvDepthPnt>& idpts, Sophus::SE3d thisToNext)
+void Initializer::BuildInitialSceneForDso(std::vector<InvDepthPnt>& idpts, Sophus::SE3d& thisToNext)
 {
     if(miFirstViewIndex == -1 ||
        miSecondViewIndex == -1)
@@ -80,7 +82,7 @@ void Initializer::BuildInitialSceneForDso(std::vector<InvDepthPnt>& idpts, Sophu
     idpts.clear();
 
     cv::Mat KP = mpEpipolarSolver->GetCameraMat() * (cv::Mat(Pmats[miFirstViewIndex]));
-    cv::Mat KP2 = mpEpipolarSolver->GetCameraMat() * (cv::Mat(Pmats[miSecondViewIndex]));
+    //cv::Mat KP2 = mpEpipolarSolver->GetCameraMat() * (cv::Mat(Pmats[miSecondViewIndex]));
 
     for(const CloudPoint& p: mCloud)
     {
@@ -107,11 +109,9 @@ void Initializer::BuildInitialSceneForDso(std::vector<InvDepthPnt>& idpts, Sophu
 
         /*
         int secondIdx = p.index_of_2d_origin[miSecondViewIndex];
-        if (secondIdx == -1)
-            continue;
+        if (secondIdx == -1) continue;
 
         cv::KeyPoint& secondViewKp = mKeyPointsVec[miSecondViewIndex][secondIdx];
-
         InvDepthPnt pntInSecondView;
         pntInSecondView.u = secondViewKp.pt.x;
         pntInSecondView.v = secondViewKp.pt.y;
@@ -125,6 +125,7 @@ void Initializer::BuildInitialSceneForDso(std::vector<InvDepthPnt>& idpts, Sophu
         */
     }
 
+    //thisToNext = GetSecondFramePose().inverse();
     thisToNext = GetSecondFramePose();
 }
 
@@ -135,13 +136,30 @@ Sophus::SE3d Initializer::GetNthFramePose(int id)
         return Sophus::SE3d();
 
     cv::Matx34d pose = Pmats[id];
+    return GetSE3From3x4Mat(pose);
+}
+
+Sophus::SE3d Initializer::GetSE3From3x4Mat(const cv::Matx34d& pose)
+{
     Eigen::Matrix<double,4,4> midFormat;
     midFormat << pose(0, 0), pose(0, 1), pose(0, 2), pose(0, 3),
-                 pose(1, 0), pose(1, 1), pose(1, 2), pose(1, 3),
-                 pose(2, 0), pose(2, 1), pose(2, 2), pose(2, 3),
-                 0.0, 0.0, 0.0, 1.0;
+            pose(1, 0), pose(1, 1), pose(1, 2), pose(1, 3),
+            pose(2, 0), pose(2, 1), pose(2, 2), pose(2, 3),
+            0.0, 0.0, 0.0, 1.0;
     return Sophus::SE3d(midFormat);
+}
 
+cv::Matx34d Initializer::GetInvFromSophusPose(const Sophus::SE3d& pose_se3)
+{
+    Sophus::SE3d inv_pose = pose_se3.inverse();
+
+    auto mat = inv_pose.matrix3x4();
+
+    return cv::Matx34d(
+            mat(0, 0), mat(0, 1), mat(0, 2), mat(0, 3),
+            mat(1, 0), mat(1, 1), mat(1, 2), mat(1, 3),
+            mat(2, 0), mat(2, 1), mat(2, 2), mat(2, 3)
+    );
 }
 
 std::vector<iFrame> Initializer::GetBaseLineFrames()
@@ -166,7 +184,7 @@ void Initializer::MatchFeatures()
     std::shared_ptr<iFeatureExtractor> pExtractor = std::make_shared<iFeatureExtractor>(eDetectorType::ORB);
     pExtractor->ExtractFeaturesBatch(mImagesGrayVec, descriptorsVec, mKeyPointsVec);
 
-    //std::shared_ptr<RichFeatureMatcher> pMatcher = std::make_shared<RichFeatureMatcher>(eMatcherType::FlannBased);
+    //std::shared_ptr<iRichFeatureMatcher> pMatcher = std::make_shared<iRichFeatureMatcher>(eMatcherType::FlannBased);
     std::shared_ptr<iRichFeatureMatcher> pMatcher = std::make_shared<iRichFeatureMatcher>(eMatcherType::BruteForce);
 
     for (int i = 0; i < (int)mImagesGrayVec.size() - 1; i++)
@@ -174,7 +192,7 @@ void Initializer::MatchFeatures()
         for (int j = i + 1; j < mImagesGrayVec.size(); j++)
         {
             std::cout << "*** Matching " << mImageNamesVec[i]
-                      << ", " << mImageNamesVec[j];
+                      << " & " << mImageNamesVec[j];
 
             std::vector<cv::DMatch> matches, matchesFlipped;
             pMatcher->Match(descriptorsVec[i], descriptorsVec[j],
@@ -182,7 +200,7 @@ void Initializer::MatchFeatures()
                             matches);
             pMatcher->FlipMatches(matches, matchesFlipped);
 
-            std::cout << ":" << matches.size() << std::endl;
+            std::cout << ": " << matches.size() << std::endl;
 
             mMatchesTable[std::make_pair(i, j)] = matches;
             mMatchesTable[std::make_pair(j, i)] = matchesFlipped;
@@ -225,7 +243,7 @@ std::map<float, ImagePair> Initializer::sortViewsForBaseline()
 {
     std::cout << "---------- Find Views Homography Inliers -----------" << std::endl;
 
-    //sort pairwise matches to find the lowest Homography inliers [Snavely07 4.2]
+    //sort pairwise matches to find the lxowest Homography inliers [Snavely07 4.2]
     std::map<float, ImagePair> matchesSizes;
     size_t numImages = mImagesGrayVec.size();
 
@@ -237,7 +255,6 @@ std::map<float, ImagePair> Initializer::sortViewsForBaseline()
             if (matches.size() < MIN_POINT_COUNT_FOR_HOMOGRAPHY)
             {
                 //Not enough points in matching
-
                 matchesSizes[1.0] = {i, j};
                 continue;
             }
@@ -249,7 +266,7 @@ std::map<float, ImagePair> Initializer::sortViewsForBaseline()
             const float inliersRatio = (float)numInliers / (float)(matches.size());
             matchesSizes[inliersRatio] = {i, j};
 
-            std::cout << "Homography inliers ratio: " << i << ", " << j << " " << inliersRatio << std::endl;
+            std::cout << "Homography inliers ratio: (" << i << ", " << j << ") -> " << inliersRatio << std::endl;
         }
     }
 
@@ -303,6 +320,8 @@ void Initializer::ConstructBaseLine()
     std::vector<CloudPoint> new_cloud;
     for (auto& imagePair : pairsHomographyInliers)
     {
+        if (fabs(imagePair.first - 1.0) < 1e-10) continue;
+
         std::cout << "Trying " << imagePair.second
                   << " " << mImageNamesVec[imagePair.second.left]
                   << " v.s. " << mImageNamesVec[imagePair.second.right]
@@ -320,12 +339,22 @@ void Initializer::ConstructBaseLine()
                              left_aligned_point2ds_vec,
                              right_aligned_point2ds_vec);
 
+//        iRichFeatureMatcher::DrawMatches("old",
+//                                         mImagesGrayVec[i], mImagesGrayVec[j],
+//                                         mKeyPointsVec[i], mKeyPointsVec[j],
+//                                         old_matches);
+
         std::vector<cv::DMatch> prunedMatches;
         bool success = FindExtrinsicsFromMatches(camera,
                                                  left_aligned_point2ds_vec,
                                                  right_aligned_point2ds_vec,
                                                  old_matches, prunedMatches,
                                                  Pleft, Pright);
+
+//        iRichFeatureMatcher::DrawMatches("essentail",
+//                                         mImagesGrayVec[i], mImagesGrayVec[j],
+//                                         mKeyPointsVec[i], mKeyPointsVec[j],
+//                                         prunedMatches);
 
         if (not success)
         {
@@ -343,19 +372,25 @@ void Initializer::ConstructBaseLine()
             continue;
         }
 
-        /*
-        RichFeatureMatcher::DrawMatches("hello",
-                                        mImagesGrayVec[i], mImagesGrayVec[j],
-                                        mKeyPointsVec[i], mKeyPointsVec[j],
-                                        prunedMatches);
-         */
+
+//        iRichFeatureMatcher::DrawMatches("hello",
+//                                        mImagesGrayVec[i], mImagesGrayVec[j],
+//                                        mKeyPointsVec[i], mKeyPointsVec[j],
+//                                        prunedMatches);
+
 
         mMatchesTable[std::make_pair(i, j)] = prunedMatches;
+
+        ////??????????????????/////////
+        //cv::Matx34d pleftInv = GetInvFromSophusPose(GetSE3From3x4Mat(Pleft));
+        //cv::Matx34d prightInv = GetInvFromSophusPose(GetSE3From3x4Mat(Pright));
+        ////??????????????????/////////
 
         new_cloud.clear();
         TriangulateViews(i, j,
                          prunedMatches,
                          Pleft, Pright,
+                         //pleftInv, prightInv,
                          new_cloud);
 
         std::cout << "---- Triangulate from stereo views: " << imagePair.second << ", " << new_cloud.size() << " points"<< std::endl;
@@ -405,11 +440,127 @@ void Initializer::ConstructBaseLine()
 
     //adjustCurrentBundle();
 
+    std::cout << "\n***** Initial point cloud recovered: " << mCloud.size() << " *****" << std::endl << std::endl;
+}
+
+void Initializer::ConstructBaseLineSpecify()
+{
+    cv::Mat camera = mpEpipolarSolver->GetCameraMat();
+
+    std::cout << "----------- Find Baseline Triangulation ------------" << std::endl;
+
+    //std::map<float, ImagePair> pairsHomographyInliers = sortViewsForBaseline();
+
+    cv::Matx34d Pleft = cv::Matx34d::eye();
+    cv::Matx34d Pright = cv::Matx34d::eye();
+    std::vector<CloudPoint> new_cloud;
+    /*
+    for (auto &imagePair : pairsHomographyInliers)
+    {
+        std::cout << "Trying " << imagePair.second
+                  << " " << mImageNamesVec[imagePair.second.left]
+                  << " v.s. " << mImageNamesVec[imagePair.second.right]
+                  << " ratio: " << imagePair.first << std::endl << std::flush;
+
+        size_t i = imagePair.second.left;
+        size_t j = imagePair.second.right;
+    */
+        size_t i = 7;
+        size_t j = 8;
+
+        std::vector<cv::DMatch> old_matches = mMatchesTable[std::make_pair(i, j)];
+        std::vector<cv::Point2d> left_aligned_point2ds_vec;
+        std::vector<cv::Point2d> right_aligned_point2ds_vec;
+        get_aligned_point2ds(mKeyPointsVec[i],
+                             mKeyPointsVec[j],
+                             old_matches,
+                             left_aligned_point2ds_vec,
+                             right_aligned_point2ds_vec);
+
+        std::vector<cv::DMatch> prunedMatches;
+        bool success = FindExtrinsicsFromMatches(camera,
+                                                 left_aligned_point2ds_vec,
+                                                 right_aligned_point2ds_vec,
+                                                 old_matches, prunedMatches,
+                                                 Pleft, Pright);
+
+        if (not success) {
+            std::cout << "stereo view could not be obtained " << i << ", " << j
+                      << ", go to next pair" << std::endl << std::flush;
+            return;
+        }
+
+        float poseInliersRatio = (float) prunedMatches.size() / (float) old_matches.size();
+        std::cout << "pose inliers ratio " << poseInliersRatio << std::endl;
+
+//        if (poseInliersRatio < POSE_INLIERS_MINIMAL_RATIO) {
+//            std::cout << "insufficient pose inliers. skip." << std::endl;
+//            return;
+//        }
+
+        mMatchesTable[std::make_pair(i, j)] = prunedMatches;
+
+        new_cloud.clear();
+        TriangulateViews(i, j,
+                         prunedMatches,
+                         Pleft, Pright,
+                         new_cloud);
+
+        std::cout << "---- Triangulate from stereo views: " << i << ", " << j << ", " << new_cloud.size() << " points"
+                  << std::endl;
+
+        miFirstViewIndex = i;
+        miSecondViewIndex = j;
+
+        Pmats[miFirstViewIndex] = Pleft;
+        Pmats[miSecondViewIndex] = Pright;
+
+        std::cout << "\n***** Taking baseline from " << mImageNamesVec[miFirstViewIndex]
+                  << " and " << mImageNamesVec[miSecondViewIndex] << " *****" << std::endl;
+
+        std::cout << "\n" << mImageNamesVec[miFirstViewIndex] << " pose:\n" << Pleft << std::endl;
+        std::cout << "\n" << mImageNamesVec[miSecondViewIndex] << " pose:\n" << Pright << std::endl;
+
+        mDoneViewsIdxVec.push_back(miFirstViewIndex);
+        mDoneViewsIdxVec.push_back(miSecondViewIndex);
+
+ //       break;
+ //   }
+
+
+    cv::Mat KP2 = mpEpipolarSolver->GetCameraMat() * (cv::Mat(Pmats[miSecondViewIndex]));
+    std::vector<cv::DMatch> matches_chosen = mMatchesTable[std::make_pair(miFirstViewIndex, miSecondViewIndex)];
+    for (auto i = 0; i < new_cloud.size(); i++) {
+        CloudPoint clp;
+        clp.p3d = new_cloud[i].p3d;
+        clp.index_of_2d_origin = std::vector<int>(mImagesBgrVec.size(), -1);
+        clp.index_of_2d_origin[miFirstViewIndex] = matches_chosen[i].queryIdx;
+        clp.index_of_2d_origin[miSecondViewIndex] = matches_chosen[i].trainIdx;
+
+        //cv::Mat homo_p3d = cv::Mat(4, 1, CV_64F, {clp.p3d.x, clp.p3d.y, clp.p3d.z, 1.0});
+        cv::Mat homo_p3d = cv::Mat(4, 1, CV_64F);
+        homo_p3d.at<double>(0, 0) = clp.p3d.x;
+        homo_p3d.at<double>(1, 0) = clp.p3d.y;
+        homo_p3d.at<double>(2, 0) = clp.p3d.z;
+        homo_p3d.at<double>(3, 0) = 1.0;
+        cv::Mat p2d_in_img2_mat = KP2 * homo_p3d;
+        cv::Point2f p2d_in_img2(p2d_in_img2_mat.at<double>(0) / p2d_in_img2_mat.at<double>(2),
+                                p2d_in_img2_mat.at<double>(1) / p2d_in_img2_mat.at<double>(2));
+        clp.reprojection_error = cv::norm(
+                p2d_in_img2 - mKeyPointsVec[miSecondViewIndex][matches_chosen[i].trainIdx].pt);
+
+        mCloud.push_back(clp);
+    }
+
+    //adjustCurrentBundle();
+
     std::cout << "***** Initial point cloud recovered: " << mCloud.size() << " *****" << std::endl << std::endl;
 }
 
 void Initializer::EnrichScene()
 {
+    if (mCloud.size() < 1) return;
+
     cv::Mat camera = mpEpipolarSolver->GetCameraMat();
     cv::Mat distort_coeffs = mpEpipolarSolver->GetDistortCoeffs();
 
@@ -445,6 +596,7 @@ void Initializer::EnrichScene()
 
         //most 2d3d correspondences view
         int best_view_idx = max_3d2d_view_idx;
+        if (best_view_idx == -1) continue;
 
         // std::cout << "Best view " << working_view_idx << " has " << max_3d2d_corresp_cnt << " correspondences" << std::endl;
         std::cout << "Adding " << best_view_idx << " to existing " << cv::Mat(std::vector<int>(mDoneViewsIdxVec.begin(), mDoneViewsIdxVec.end())).t() << std::endl;
@@ -528,10 +680,18 @@ void Initializer::EnrichScene()
                       << ", leftViewIdx: " << leftViewIdx
                       << ", rightViewIdx: " << rightViewIdx << std::endl;
 
+            ////??????????????????/////////
+            //cv::Matx34d pleftInv = GetInvFromSophusPose(GetSE3From3x4Mat(Pmats[leftViewIdx]));
+            //cv::Matx34d prightInv = GetInvFromSophusPose(GetSE3From3x4Mat(Pmats[rightViewIdx]));
+            ////??????????????????/////////
+
+
             TriangulateViews(leftViewIdx, rightViewIdx,
                              prunedMatches,
                              Pmats[leftViewIdx],
                              Pmats[rightViewIdx],
+                             //pleftInv,
+                             //prightInv,
                              new_cloud);
 
             std::cout << "---- Triangulate from stereo views: "
@@ -650,6 +810,14 @@ bool Initializer::FindPoseEstimation(const cv::Mat& camera,
 
     // double minVal,maxVal;
     // cv::minMaxIdx(point2ds_vec, &minVal, &maxVal);
+
+    if (!point3ds_vec.size() || !point2ds_vec.size())
+    {
+        std::cout << "Empty 3d-2d correspondence!" << std::endl;
+        return false;
+    }
+
+
     cv::Mat rvec;
     std::vector<int> inliers;
     bool res = cv::solvePnPRansac(point3ds_vec, point2ds_vec,
@@ -711,18 +879,22 @@ bool Initializer::FindExtrinsicsFromMatches(const cv::Mat& K,
 {
     prunedMatches.clear();
 
-    double focal = K.at<double>(0, 0); // Note: assuming fx = fy
+    //double focal = K.at<double>(0, 0); // Note: assuming fx = fy
+    double focal = (K.at<double>(0, 0) + K.at<double>(1, 1))/2;
     cv::Point2d pp(K.at<double>(0, 2), K.at<double>(1, 2));
 
     cv::Mat E, R, t;
     cv::Mat mask;
    // E = findEssentialMat(left_point2ds, right_point2ds, focal, pp, cv::RANSAC, 0.999, 1.0, mask);
     E = findEssentialMat(left_point2ds, right_point2ds, K, cv::RANSAC, 0.999, 1.0, mask);
+    std::cout << "...... findEssentialMat: " << cv::countNonZero(mask) << std::endl;
 
     // Find Pright camera matrix from the essential matrix
     // Cheirality check (all points are in front of camera: i.e. the triangulated 3D points should have positive depth) is performed internally.
     //int recover_inliers_cnt = recoverPose(E, left_point2ds, right_point2ds, R, t, focal, pp, mask);
+    // cv::Mat mask2;
     int recover_inliers_cnt = recoverPose(E, left_point2ds, right_point2ds, K, R, t, mask);
+    std::cout << "...... recoverPose: " << cv::countNonZero(mask) << std::endl;
 
     std::cout << "recoverPose inliers:" << recover_inliers_cnt << std::endl;
     if (recover_inliers_cnt < 1)
@@ -762,8 +934,12 @@ void Initializer::TriangulateViews(int left_view_index,
                          left_point_2ds,
                          right_point_2ds);
 
+    if (left_point_2ds.size() < 1 || right_point_2ds.size() < 1) return;
+
     cv::Mat K = mpEpipolarSolver->GetCameraMat();
     cv::Mat normalizedLeftPts, normalizedRightPts;
+    //std::cout << "............... left_point_2ds.size():" << left_point_2ds.size() << std::endl;
+    //std::cout << "............... right_point_2ds.size():" << right_point_2ds.size() << std::endl;
     undistortPoints(left_point_2ds,  normalizedLeftPts,  K, cv::Mat());
     undistortPoints(right_point_2ds, normalizedRightPts, K, cv::Mat());
 
@@ -1147,3 +1323,56 @@ void Initializer::SaveCloudAndCamerasToPLY(const std::string& prefix)
 
     ofsc.close();
 }
+
+void Initializer::SaveCamerasInvToPLY(const std::string& prefix)
+{
+    ofstream ofsc(prefix + "_cameras.ply");
+
+    ofsc << "ply" << std::endl <<
+         "format ascii 1.0" << std::endl <<
+         "element vertex " << (Pmats.size() * 4) << std::endl <<
+         "property float x" << std::endl <<
+         "property float y" << std::endl <<
+         "property float z" << std::endl <<
+         "element edge " << (Pmats.size() * 3) << std::endl <<
+         "property int vertex1" << std::endl <<
+         "property int vertex2" << std::endl <<
+         "property uchar red" << std::endl <<
+         "property uchar green" << std::endl <<
+         "property uchar blue" << std::endl <<
+         "end_header" << std::endl;
+
+    for (int i = 0; i < Pmats.size(); i++)
+    {
+        Sophus::SE3d pose = GetNthFramePose(i).inverse();
+        auto rotation = pose.rotationMatrix();
+        auto translation = pose.translation();
+
+        cv::Point3d c(translation(0, 0), translation(1, 0), translation(2, 0));
+        cv::Point3d cx = c + cv::Point3d(rotation(0, 0), rotation(1, 0), rotation(2, 0)) * 0.2;
+        cv::Point3d cy = c + cv::Point3d(rotation(0, 1), rotation(1, 1), rotation(2, 1)) * 0.2;
+        cv::Point3d cz = c + cv::Point3d(rotation(0, 2), rotation(1, 2), rotation(2, 2)) * 0.2;
+
+        ofsc << c.x  << " " << c.y  << " " << c.z  << endl;
+        ofsc << cx.x << " " << cx.y << " " << cx.z << endl;
+        ofsc << cy.x << " " << cy.y << " " << cy.z << endl;
+        ofsc << cz.x << " " << cz.y << " " << cz.z << endl;
+    }
+
+    //const int camVertexStartIndex = mCloud.size();
+
+    for (size_t i = 0; i < Pmats.size(); i++) {
+        ofsc << (i * 4 + 0) << " " <<
+             (i * 4 + 1) << " " <<
+             "255 0 0" << endl;
+        ofsc << (i * 4 + 0) << " " <<
+             (i * 4 + 2) << " " <<
+             "0 255 0" << endl;
+        ofsc << (i * 4 + 0) << " " <<
+             (i * 4 + 3) << " " <<
+             "0 0 255" << endl;
+    }
+
+    ofsc.close();
+}
+

@@ -374,7 +374,7 @@ Vec4 FullSystem::trackNewCoarse(FrameHessian* fh)
 	// as long as maxResForImmediateAccept is not reached, I'll continue through the options.
 	// I'll keep track of the so-far best achieved residual for each level in achievedRes.
 	// If on a coarse level, tracking is WORSE than achievedRes, we will not continue to save time.
-
+    std::cout << "............. pyrLevelsUsed:" << pyrLevelsUsed << std::endl;
 
 	Vec5 achievedRes = Vec5::Constant(NAN);
 	bool haveOneGood = false;
@@ -488,6 +488,7 @@ void FullSystem::traceNewCoarse(FrameHessian* fh)
 	K(0,2) = Hcalib.cxl();
 	K(1,2) = Hcalib.cyl();
 
+	std::cout << "........ frameHessians.size():" << frameHessians.size() << std::endl;
 	for(FrameHessian* host : frameHessians)		// go through all active frames
 	{
 
@@ -497,6 +498,7 @@ void FullSystem::traceNewCoarse(FrameHessian* fh)
 
 		Vec2f aff = AffLight::fromToVecExposure(host->ab_exposure, fh->ab_exposure, host->aff_g2l(), fh->aff_g2l()).cast<float>();
 
+		std::cout << "........ host->immaturePoints.size():" << host->immaturePoints.size() << std::endl;
 		for(ImmaturePoint* ph : host->immaturePoints)
 		{
 			ph->traceOn(fh, KRKi, Kt, aff, &Hcalib, false );
@@ -510,14 +512,14 @@ void FullSystem::traceNewCoarse(FrameHessian* fh)
 			trace_total++;
 		}
 	}
-//	printf("ADD: TRACE: %'d points. %'d (%.0f%%) good. %'d (%.0f%%) skip. %'d (%.0f%%) badcond. %'d (%.0f%%) oob. %'d (%.0f%%) out. %'d (%.0f%%) uninit.\n",
-//			trace_total,
-//			trace_good, 100*trace_good/(float)trace_total,
-//			trace_skip, 100*trace_skip/(float)trace_total,
-//			trace_badcondition, 100*trace_badcondition/(float)trace_total,
-//			trace_oob, 100*trace_oob/(float)trace_total,
-//			trace_out, 100*trace_out/(float)trace_total,
-//			trace_uninitialized, 100*trace_uninitialized/(float)trace_total);
+	printf("ADD: TRACE: %'d points. %'d (%.0f%%) good. %'d (%.0f%%) skip. %'d (%.0f%%) badcond. %'d (%.0f%%) oob. %'d (%.0f%%) out. %'d (%.0f%%) uninit.\n",
+			trace_total,
+			trace_good, 100*trace_good/(float)trace_total,
+			trace_skip, 100*trace_skip/(float)trace_total,
+			trace_badcondition, 100*trace_badcondition/(float)trace_total,
+			trace_oob, 100*trace_oob/(float)trace_total,
+			trace_out, 100*trace_out/(float)trace_total,
+			trace_uninitialized, 100*trace_uninitialized/(float)trace_total);
 }
 
 
@@ -665,6 +667,7 @@ void FullSystem::activatePointsMT()
 		activatePointsMT_Reductor(&optimized, &toOptimize, 0, toOptimize.size(), 0, 0);
 
 
+	int tmpSum = 0;
 	for(unsigned k=0;k<toOptimize.size();k++)
 	{
 		PointHessian* newpoint = optimized[k];
@@ -679,6 +682,7 @@ void FullSystem::activatePointsMT()
 				ef->insertResidual(r);
 			assert(newpoint->efPoint != 0);
 			delete ph;
+			tmpSum++;
 		}
 		else if(newpoint == (PointHessian*)((long)(-1)) || ph->lastTraceStatus==IPS_OOB)
 		{
@@ -690,6 +694,8 @@ void FullSystem::activatePointsMT()
 			assert(newpoint == 0 || newpoint == (PointHessian*)((long)(-1)));
 		}
 	}
+
+	std::cout << ".................... tmpSum:" << tmpSum << std::endl;
 
 
 	for(FrameHessian* host : frameHessians)
@@ -857,6 +863,7 @@ void FullSystem::addSfmInitFrame(ImageAndExposure* image, int id, bool first)
             mpSfmInitializer->BuildInitialSceneForDso(idpts, initThisToNext);
 
             shell->camToWorld = initThisToNext.inverse();
+			//shell->camToWorld = initThisToNext;
 
             initializeFromSfm(fh, idpts);
 			lock.unlock();
@@ -937,7 +944,8 @@ void FullSystem::initializeFromSfm(FrameHessian *newFrame, std::vector<InvDepthP
         ef->insertPoint(ph);
     }
 
-    SE3 firstToNew = mpSfmInitializer->GetSecondFramePose();
+    //SE3 firstToNew = initThisToNext.inverse();
+	SE3 firstToNew = initThisToNext;
     firstToNew.translation() /= rescaleFactor;
 
 
@@ -951,10 +959,12 @@ void FullSystem::initializeFromSfm(FrameHessian *newFrame, std::vector<InvDepthP
         firstFrame->shell->camToTrackingRef = SE3();
 
         newFrame->shell->camToWorld = firstToNew.inverse();
+		//newFrame->shell->camToWorld = firstToNew;
         newFrame->shell->aff_g2l = AffLight(0,0);
         newFrame->setEvalPT_scaled(newFrame->shell->camToWorld.inverse(),newFrame->shell->aff_g2l);
         newFrame->shell->trackingRef = firstFrame->shell;
         newFrame->shell->camToTrackingRef = firstToNew.inverse();
+		//newFrame->shell->camToTrackingRef = firstToNew;
 
     }
 
@@ -969,6 +979,11 @@ void FullSystem::addActiveFrame( ImageAndExposure* image, int id )
     if(isLost) return;
 	boost::unique_lock<boost::mutex> lock(trackMutex);
 
+
+	if (allFrameHistory.size() > 0)
+	{
+		std::cout << ".......... [" << allFrameHistory.size()-1 << "]:\n" << allFrameHistory[allFrameHistory.size()-1]->camToWorld.matrix() << std::endl;
+	}
 
 	// =========================== add into allFrameHistory =========================
 	FrameHessian* fh = new FrameHessian();
@@ -1090,6 +1105,7 @@ void FullSystem::deliverTrackedFrame(FrameHessian* fh, bool needKF)
 	}
 	else
 	{
+		std::cout << "............. linearizeOperation:" << linearizeOperation << std::endl;
 		boost::unique_lock<boost::mutex> lock(trackMapSyncMutex);
 		unmappedTrackedFrames.push_back(fh);
 		if(needKF) needNewKFAfter=fh->shell->trackingRef->id;
@@ -1116,6 +1132,7 @@ void FullSystem::mappingLoop()
 			if(!runMapping) return;
 		}
 
+		std::cout << ">>>>>>>>>>>>>>>>>>>>>>>>>>>  unmappedTrackedFrames.size():" << unmappedTrackedFrames.size() << std::endl;
 		FrameHessian* fh = unmappedTrackedFrames.front();
 		unmappedTrackedFrames.pop_front();
 
@@ -1295,7 +1312,11 @@ void FullSystem::makeKeyFrame( FrameHessian* fh)
         printf("......^ _ ^......\n");
     }
 
-    if(isLost) return;
+    if(isLost)
+    {
+        printf("......> _ <|||......\n");
+        return;
+    }
 
 
 
@@ -1316,7 +1337,7 @@ void FullSystem::makeKeyFrame( FrameHessian* fh)
         coarseTracker_forNewKF->debugPlotIDepthMapFloat(outputWrapper);
 	}
 
-	debugPlot("post Optimize");
+	//debugPlot("post Optimize");
 
 
 

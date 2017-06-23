@@ -396,22 +396,22 @@ int main( int argc, char** argv )
 	for(int i = 0; i >= 0 && i < lstart; i++)
 	{
 		sfmInitImageNames.push_back(reader->getImageName(i));
-//		MinimalImageB* img = reader->getImageRaw(i);
-//
-//		int w = reader->undistort->getSize()[0];
-//		int h = reader->undistort->getSize()[1];
-//      cv::Mat cvImage(h, w, CV_8UC);
-//		memcpy(cvImage.data, img->data, sizeof(unsigned char)*w*h);
-
 //      cv::Mat cvImage = reader->getImageForSfm(i);
 //		cv::imshow("huhaha" , cvImage);
 //		cv::waitKey(0);
-		sfmInitImages.push_back(reader->getImageForSfm(i));
+//        sfmInitImages.push_back(reader->getImageForSfm(i));
+
+        cv::Mat sfmImg = reader->getImageForSfmCrop(i);
+        //std::cout << ".................. cols:" << sfmImg.cols << ",rows:" << sfmImg.rows << std::endl;
+        //cv::imshow("sfm", sfmImg);
+        //cv::waitKey(0);
+        sfmInitImages.push_back(sfmImg);
 	}
+
+    //cv::destroyWindow("sfm");
 
 
 	FullSystem* fullSystem = new FullSystem();
-	//fullSystem->setSfmInitializer(reader->undistort->getK(), sfmInitImageNames, sfmInitImages);
 	fullSystem->setGammaFunction(reader->getPhotometricGamma());
 	fullSystem->linearizeOperation = (playbackSpeed==0);
 
@@ -437,8 +437,10 @@ int main( int argc, char** argv )
 
 
     // to make MacOS happy: run this in dedicated thread -- and use this one to run the GUI.
+	fullSystem->setSfmInitializer(reader->undistort->getK(), sfmInitImageNames, sfmInitImages);
     std::thread runthread([&]() {
-		  fullSystem->setSfmInitializer(reader->undistort->getK(), sfmInitImageNames, sfmInitImages);
+		  //usleep(10*1000*1000);
+
 		  if (fullSystem->GetFirstFrameIndex() != -1 &&
 			  fullSystem->GetSecondFrameIndex() != -1)
 		  {
@@ -540,7 +542,7 @@ int main( int argc, char** argv )
                     for(IOWrap::Output3DWrapper* ow : wraps) ow->reset();
 
                     fullSystem = new FullSystem();
-                    fullSystem->setSfmInitializer(reader->undistort->getK(), sfmInitImageNames, sfmInitImages);
+                   // fullSystem->setSfmInitializer(reader->undistort->getK(), sfmInitImageNames, sfmInitImages);
                     fullSystem->setGammaFunction(reader->getPhotometricGamma());
                     fullSystem->linearizeOperation = (playbackSpeed==0);
 

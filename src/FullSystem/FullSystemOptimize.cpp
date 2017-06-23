@@ -462,7 +462,7 @@ float FullSystem::optimize(int mnumOptIts)
         printOptRes(lastEnergy, lastEnergyL, lastEnergyM, 0, 0, frameHessians.back()->aff_g2l().a, frameHessians.back()->aff_g2l().b);
     }
 
-	debugPlotTracking();
+	//debugPlotTracking();
 
 
 
@@ -596,7 +596,7 @@ float FullSystem::optimize(int mnumOptIts)
 
 
 
-	debugPlotTracking();
+	//debugPlotTracking();
 
 	return sqrtf((float)(lastEnergy[0] / (patternNum*ef->resInA)));
 

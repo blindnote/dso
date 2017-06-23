@@ -161,6 +161,7 @@ public:
 
 		// load timestamps if possible.
 		loadTimestamps();
+		printf("........... ImageFolderReader: orgSize (%d, %d), size:(%d, %d)!\n", widthOrg, heightOrg, width, height);
 		printf("ImageFolderReader: got %d files in %s!\n", (int)files.size(), path.c_str());
 
 	}
@@ -209,6 +210,21 @@ public:
         return files.size() > id ? files[id] : "";
     }
 
+	cv::Mat getImageForSfmCrop(int id)
+	{
+		ImageAndExposure* imgExp = getImage_internal(id, 0);
+		//std::cout << "w,h:" << imgExp->w << ", " << imgExp->h << std::endl;
+
+        cv::Mat m = cv::Mat(imgExp->h, imgExp->w, CV_8U, CV_LOAD_IMAGE_GRAYSCALE);
+        //std::cout << "...... types():" << m.type() << std::endl;
+        //std::cout << "...... channels():" << m.channels() << std::endl;
+        for(int r = 0; r < imgExp->h; r++)
+            for(int c = 0; c < imgExp->w; c++)
+                m.at<uchar>(r, c) = (uchar)(imgExp->image[r * imgExp->w + c]);
+
+		return m.clone();
+	}
+
     cv::Mat getImageForSfm(int id)
     {
         if(!isZipped)
@@ -240,6 +256,7 @@ public:
             }
 
             cv::Mat m = cv::imdecode(cv::Mat(readbytes,1,CV_8U, databuffer), CV_LOAD_IMAGE_GRAYSCALE);
+            std::cout << ".............. readbytes:" << readbytes << ", m.rows:" << m.rows << ", m.cols:" << m.cols << std::endl;
             return m.clone();
 #else
             printf("ERROR: cannot read .zip archive, as compile without ziplib!\n");

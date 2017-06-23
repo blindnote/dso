@@ -156,6 +156,6 @@ void iRichFeatureMatcher::DrawMatches(const std::string name,
     cv::Mat scaled_image;
     cv::resize(matches_to_draw, scaled_image, cv::Size(), scale, scale);
     cv::imshow( name, scaled_image );
-    cv::waitKey(800);
+    cv::waitKey(0);
     cv::destroyWindow(name);
 }
