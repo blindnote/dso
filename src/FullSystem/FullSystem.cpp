@@ -695,7 +695,7 @@ void FullSystem::activatePointsMT()
 		}
 	}
 
-	std::cout << ".................... tmpSum:" << tmpSum << std::endl;
+	//std::cout << ".................... tmpSum:" << tmpSum << std::endl;
 
 
 	for(FrameHessian* host : frameHessians)
@@ -906,7 +906,7 @@ void FullSystem::initializeFromSfm(FrameHessian *newFrame, std::vector<InvDepthP
 //        numID++;
 //    }
 //    float rescaleFactor = 1 / (sumID / numID);
-    float rescaleFactor = 1.21;
+    float rescaleFactor = 1.35; //1.21;
 
     // randomly sub-select the points I need.
     // float keepPercentage = setting_desiredPointDensity / coarseInitializer->numPoints[0];
@@ -1013,9 +1013,12 @@ void FullSystem::addActiveFrame( ImageAndExposure* image, int id )
 		}
 		else if(coarseInitializer->trackFrame(fh, outputWrapper))	// if SNAPPED
 		{
+            std::cout << "----------> 1" << std::endl;
 			initializeFromInitializer(fh);
 			lock.unlock();
+            std::cout << "----------> 2" << std::endl;
 			deliverTrackedFrame(fh, true);
+            std::cout << "----------> 3" << std::endl;
 		}
 		else
 		{
@@ -1105,7 +1108,7 @@ void FullSystem::deliverTrackedFrame(FrameHessian* fh, bool needKF)
 	}
 	else
 	{
-		std::cout << "............. linearizeOperation:" << linearizeOperation << std::endl;
+		//std::cout << "............. linearizeOperation:" << linearizeOperation << std::endl;
 		boost::unique_lock<boost::mutex> lock(trackMapSyncMutex);
 		unmappedTrackedFrames.push_back(fh);
 		if(needKF) needNewKFAfter=fh->shell->trackingRef->id;
@@ -1132,7 +1135,7 @@ void FullSystem::mappingLoop()
 			if(!runMapping) return;
 		}
 
-		std::cout << ">>>>>>>>>>>>>>>>>>>>>>>>>>>  unmappedTrackedFrames.size():" << unmappedTrackedFrames.size() << std::endl;
+		//std::cout << ">>>>>>>>>>>>>>>>>>>>>>>>>>>  unmappedTrackedFrames.size():" << unmappedTrackedFrames.size() << std::endl;
 		FrameHessian* fh = unmappedTrackedFrames.front();
 		unmappedTrackedFrames.pop_front();
 

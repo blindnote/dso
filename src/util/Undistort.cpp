@@ -252,6 +252,7 @@ void PhotometricUndistorter::processFrame(T* image_in, float exposure_time, floa
 }
 template void PhotometricUndistorter::processFrame<unsigned char>(unsigned char* image_in, float exposure_time, float factor);
 template void PhotometricUndistorter::processFrame<unsigned short>(unsigned short* image_in, float exposure_time, float factor);
+//template void PhotometricUndistorter::processFrame<Vec3b>(Vec3b* image_in, float exposure_time, float factor);
 
 
 
@@ -482,6 +483,7 @@ ImageAndExposure* Undistort::undistort(const MinimalImage<T>* image_raw, float e
 }
 template ImageAndExposure* Undistort::undistort<unsigned char>(const MinimalImage<unsigned char>* image_raw, float exposure, double timestamp, float factor) const;
 template ImageAndExposure* Undistort::undistort<unsigned short>(const MinimalImage<unsigned short>* image_raw, float exposure, double timestamp, float factor) const;
+//template ImageAndExposure* Undistort::undistort<Vec3b>(const MinimalImage<Vec3b>* image_raw, float exposure, double timestamp, float factor) const;
 
 
 void Undistort::applyBlurNoise(float* img) const

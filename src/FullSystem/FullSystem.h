@@ -169,6 +169,8 @@ public:
 	void addSfmInitFrame(ImageAndExposure* image, int id, bool first);
 	int GetFirstFrameIndex() { return mpSfmInitializer->GetFirstViewIndex(); }
 	int GetSecondFrameIndex() { return mpSfmInitializer->GetSecondViewIndex(); }
+	cv::Mat GetFirstFrameMat() { return mpSfmInitializer->GetFirstFrameMat(); }
+	cv::Mat GetSecondFrameMat() { return mpSfmInitializer->GetSecondFrameMat(); }
 
 private:
 

@@ -363,7 +363,7 @@ int main( int argc, char** argv )
 	boost::thread exThread = boost::thread(exitThread);
 
 
-	ImageFolderReader* reader = new ImageFolderReader(source,calib, gammaCalib, vignette);
+	ImageFolderReader* reader = new ImageFolderReader(source, calib, gammaCalib, vignette);
 	reader->setGlobalCalibration();
 
 

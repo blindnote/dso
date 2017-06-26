@@ -130,14 +130,30 @@ include_directories( /usr/local/Cellar/boost/1.63.0/include )
 file(GLOB BOOST_LIBRARIES_MINE "/usr/local/Cellar/boost/1.63.0/lib/*" ) 
 
 include_directories( /usr/local/Cellar/suite-sparse/4.5.4/include/ )
-file(GLOB SUITESPARSE_LIBRARIES_MINE "/usr/local/Cellar/suite-sparse/4.5.4/lib/*" ) 
+file(GLOB SUITESPARSE_LIBRARIES_MINE "/usr/local/Cellar/suite-sparse/4.5.4/lib/*" )
+
+# realsense
+include_directories( /usr/local/include/ )
+include_directories( /Users/yinr/ComputerVision/librealsense/examples )
+file(GLOB REALSENSE_LIBRARIES "/usr/local/lib/librealsense.dylib")
+
+# glew
+include_directories( /usr/local/Cellar/glew/2.0.0/include/ )
+file(GLOB GLEW_LIBRARIES "/usr/local/Cellar/glew/2.0.0/lib/*")
+
+# glfw
+include_directories( /usr/local/Cellar/glfw/3.2.1/include/ )
+file(GLOB GLFW_LIBRARIES "/usr/local/Cellar/glfw/3.2.1/lib/*")
+
 
 # build main executable (only if we have both OpenCV and Pangolin)
 if (OpenCV_FOUND AND Pangolin_FOUND)
 	message("--- compiling dso_dataset.")
-	add_executable(dso_dataset ${PROJECT_SOURCE_DIR}/src/main_dso_pangolin.cpp )
+	add_executable(dso_dataset ${PROJECT_SOURCE_DIR}/src/main_dso_pangolin.cpp)
+	add_executable(dso_r200 ${PROJECT_SOURCE_DIR}/src/main_realtime_r200.cpp)
     #target_link_libraries(dso_dataset dso boost_system boost_thread cxsparse ${LIBZIP_LIBRARY} ${OPENCV_LIBRARIES_MINE} ${Pangolin_LIBRARIES} ${OpenCV_LIBS})
-    target_link_libraries(dso_dataset dso ${BOOST_LIBRARIES_MINE} ${SUITESPARSE_LIBRARIES_MINE} ${LIBZIP_LIBRARY} ${OPENCV_LIBRARIES_MINE} ${Pangolin_LIBRARIES} ${OpenCV_LIBS})
+    target_link_libraries(dso_dataset dso ${BOOST_LIBRARIES_MINE} ${SUITESPARSE_LIBRARIES_MINE} ${LIBZIP_LIBRARY} ${OPENCV_LIBRARIES_MINE} ${Pangolin_LIBRARIES} ${OpenCV_LIBS} ${REALSENSE_LIBRARIES})
+	target_link_libraries(dso_r200 dso ${BOOST_LIBRARIES_MINE} ${SUITESPARSE_LIBRARIES_MINE} ${LIBZIP_LIBRARY} ${OPENCV_LIBRARIES_MINE} ${Pangolin_LIBRARIES} ${OpenCV_LIBS} ${REALSENSE_LIBRARIES} ${GLEW_LIBRARIES} ${GLFW_LIBRARIES})
 else()
 	message("--- not building dso_dataset, since either don't have openCV or Pangolin.")
 endif()

@@ -45,6 +45,8 @@ public:
     Sophus::SE3d GetSecondFramePose();
     inline int GetFirstViewIndex() { return miFirstViewIndex; }
     inline int GetSecondViewIndex() { return miSecondViewIndex; }
+    inline cv::Mat GetFirstFrameMat() { return mImagesGrayVec[miFirstViewIndex].clone(); }
+    inline cv::Mat GetSecondFrameMat() { return mImagesGrayVec[miSecondViewIndex].clone(); }
 
     void BuildInitialSceneForDso(std::vector<InvDepthPnt>& idpts, Sophus::SE3d& thisToNext);
 

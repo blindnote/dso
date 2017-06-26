@@ -81,22 +81,24 @@ CoarseInitializer::~CoarseInitializer()
 bool CoarseInitializer::trackFrame(FrameHessian* newFrameHessian, std::vector<IOWrap::Output3DWrapper*> &wraps)
 {
 	newFrame = newFrameHessian;
-
+	//std::cout << "**************** 0:" << wraps.size() << std::endl;
     for(IOWrap::Output3DWrapper* ow : wraps)
         ow->pushLiveFrame(newFrameHessian);
 
 	int maxIterations[] = {5,5,10,30,50};
-
+	//std::cout << "**************** 1" << std::endl;
 
 
 	alphaK = 2.5*2.5;//*freeDebugParam1*freeDebugParam1;
 	alphaW = 150*150;//*freeDebugParam2*freeDebugParam2;
 	regWeight = 0.8;//*freeDebugParam4;
 	couplingWeight = 1;//*freeDebugParam5;
+	//std::cout << "**************** 2" << std::endl;
 
 	if(!snapped)
 	{
 		thisToNext.translation().setZero();
+		//std::cout << "**************** 3" << std::endl;
 		for(int lvl=0;lvl<pyrLevelsUsed;lvl++)
 		{
 			int npts = numPoints[lvl];
@@ -109,15 +111,16 @@ bool CoarseInitializer::trackFrame(FrameHessian* newFrameHessian, std::vector<IO
 			}
 		}
 	}
+	//std::cout << "**************** 4" << std::endl;
 
-
+	//std::cout << ">>>>>>>>>>>>>> 0" << std::endl;
 	SE3 refToNew_current = thisToNext;
 	AffLight refToNew_aff_current = thisToNext_aff;
 
 	if(firstFrame->ab_exposure>0 && newFrame->ab_exposure>0)
 		refToNew_aff_current = AffLight(logf(newFrame->ab_exposure /  firstFrame->ab_exposure),0); // coarse approximation.
 
-
+	//std::cout << ">>>>>>>>>>>>>> 1" << std::endl;
 	Vec3f latestRes = Vec3f::Zero();
 	for(int lvl=pyrLevelsUsed-1; lvl>=0; lvl--)
 	{
@@ -151,6 +154,7 @@ bool CoarseInitializer::trackFrame(FrameHessian* newFrameHessian, std::vector<IO
 			std::cout << refToNew_current.log().transpose() << " AFF " << refToNew_aff_current.vec().transpose() <<"\n";
 		}
 
+		//std::cout << ">>>>>>>>>>>>>> 2" << std::endl;
 		int iteration=0;
 		while(true)
 		{
@@ -246,7 +250,7 @@ bool CoarseInitializer::trackFrame(FrameHessian* newFrameHessian, std::vector<IO
 			iteration++;
 		}
 		latestRes = resOld;
-
+		//std::cout << ">>>>>>>>>>>>>> 3" << std::endl;
 	}
 
 
@@ -1010,6 +1014,9 @@ void CoarseInitializer::makeNN()
 				float df = expf(-ret_dist[k]*NNDistFactor);
 				sumDF += df;
 				pts[i].neighboursDist[myidx]=df;
+
+                if (!(ret_index[k]>=0 && ret_index[k] < npts)) continue;
+
 				assert(ret_index[k]>=0 && ret_index[k] < npts);
 				myidx++;
 			}
@@ -1026,6 +1033,7 @@ void CoarseInitializer::makeNN()
 				pts[i].parent = ret_index[0];
 				pts[i].parentDist = expf(-ret_dist[0]*NNDistFactor);
 
+				//std::cout << "......... ret_index[0]:" << ret_index[0] << ", numPoints[" << lvl+1 <<"]:" << numPoints[lvl+1] << std::endl;
 				assert(ret_index[0]>=0 && ret_index[0] < numPoints[lvl+1]);
 			}
 			else
