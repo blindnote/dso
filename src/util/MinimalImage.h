@@ -125,6 +125,18 @@ public:
 		}
 	}
 
+	inline void print_data() {
+        printf("\n");
+		for (auto y = 0; y < h; y++) {
+			for (auto x = 0; x < w; x++) {
+				if (y == h-1)
+					printf("%u, ", data[y * w + x]);
+			}
+            if (y == h-1)
+			    printf("\n");
+		}
+	}
+
 
 
 

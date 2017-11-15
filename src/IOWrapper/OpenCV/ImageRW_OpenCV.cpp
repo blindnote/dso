@@ -45,6 +45,7 @@ MinimalImageB* readImageBW_8U(std::string filename)
 		printf("cv::imread did something strange! this may segfault. \n");
 		return 0;
 	}
+	//printf("****** m.cols: %d, m.rows:%d", m.cols, m.rows);
 	MinimalImageB* img = new MinimalImageB(m.cols, m.rows);
 	memcpy(img->data, m.data, m.rows*m.cols);
 	return img;

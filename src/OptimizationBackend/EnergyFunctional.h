@@ -75,6 +75,7 @@ public:
 	EFResidual* insertResidual(PointFrameResidual* r);
 	EFFrame* insertFrame(FrameHessian* fh, CalibHessian* Hcalib);
 	EFPoint* insertPoint(PointHessian* ph);
+    void printConnectMap();
 
 	void dropResidual(EFResidual* r);
 	void marginalizeFrame(EFFrame* fh);
@@ -120,6 +121,8 @@ public:
 	  Eigen::aligned_allocator<std::pair<uint64_t, Eigen::Vector2i>>
 	  > connectivityMap;
 
+	Mat18f* adHTdeltaF;
+
 private:
 
 	VecX getStitchedDeltaF() const;
@@ -134,7 +137,7 @@ private:
 	void calcLEnergyPt(int min, int max, Vec10* stats, int tid);
 
 	void orthogonalize(VecX* b, MatXX* H);
-	Mat18f* adHTdeltaF;
+//	Mat18f* adHTdeltaF;
 
 	Mat88* adHost;
 	Mat88* adTarget;

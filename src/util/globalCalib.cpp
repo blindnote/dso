@@ -105,4 +105,52 @@ namespace dso
 	}
 
 
+    void print_global_calib() {
+
+        printf("------------------------------------------------\n");
+
+        printf("resolution:");
+        for ( auto l = 0; l < pyrLevelsUsed; l++) {
+            printf("[%d] (%d, %d) ,", l, wG[l], hG[l]);
+        }
+        printf("\n");
+
+        printf("fx & fy:");
+        for ( auto l = 0; l < pyrLevelsUsed; l++) {
+            printf("[%d] (%f, %f) ,", l, fxG[l], fyG[l]);
+        }
+        printf("\n");
+
+        printf("cx & cy:");
+        for ( auto l = 0; l < pyrLevelsUsed; l++) {
+            printf("[%d] (%f, %f) ,", l, cxG[l], cyG[l]);
+        }
+        printf("\n");
+
+        printf("fxi & fyi:");
+        for ( auto l = 0; l < pyrLevelsUsed; l++) {
+            printf("[%d] (%f, %f) ,", l, fxiG[l], fyiG[l]);
+        }
+        printf("\n");
+
+        printf("cxi & cyi:");
+        for ( auto l = 0; l < pyrLevelsUsed; l++) {
+            printf("[%d] (%f, %f) ,", l, cxiG[l], cyiG[l]);
+        }
+        printf("\n");
+
+        printf("wM3G:%f  hM3G:%f\n", wM3G, hM3G);
+
+        printf("........all K.........\n");
+        for ( auto l = 0; l < pyrLevelsUsed; l++) {
+            printf("level[%d] ---> \n", l);
+            std::cout << KG[l] << std::endl;
+        }
+        printf("........all Ki.........");
+        for ( auto l = 0; l < pyrLevelsUsed; l++) {
+            printf("level[%d] ---> \n", l);
+            std::cout << KiG[l] << std::endl;
+        }
+    }
+
 }

@@ -65,12 +65,16 @@ void EnergyFunctional::setAdjointsF(CalibHessian* Hcalib)
 			AH.topLeftCorner<6,6>() = -hostToTarget.Adj().transpose();
 			AT.topLeftCorner<6,6>() = Mat66::Identity();
 
+       //     printf("[h:%d][t:%d] host->ab_exposure:%.6f, target->ab_exposure:%.6f\n", h, t, host->ab_exposure, target->ab_exposure);
+       //     printf("[h:%d][t:%d] host->aff_g2l_0:(%.6f, %.6f), target->aff_g2l_0:(%.6f, %.6f)\n",
+       //            h, t, host->aff_g2l_0().a, host->aff_g2l_0().b, target->aff_g2l_0().a, target->aff_g2l_0().b);
 
 			Vec2f affLL = AffLight::fromToVecExposure(host->ab_exposure, target->ab_exposure, host->aff_g2l_0(), target->aff_g2l_0()).cast<float>();
 			AT(6,6) = -affLL[0];
 			AH(6,6) = affLL[0];
 			AT(7,7) = -1;
 			AH(7,7) = affLL[0];
+//            printf("[h:%d][t:%d] affLL[0]:%.6f, affLL[1]:%.6f\n", h, t, affLL[0], affLL[1]);
 
 			AH.block<3,8>(0,0) *= SCALE_XI_TRANS;
 			AH.block<3,8>(3,0) *= SCALE_XI_ROT;
@@ -80,6 +84,23 @@ void EnergyFunctional::setAdjointsF(CalibHessian* Hcalib)
 			AT.block<3,8>(3,0) *= SCALE_XI_ROT;
 			AT.block<1,8>(6,0) *= SCALE_A;
 			AT.block<1,8>(7,0) *= SCALE_B;
+
+
+//            printf("h:%d,t:%d, AH:\n", h, t);
+//            for(auto r = 0; r < 8; r++) {
+//                for (auto c = 0; c < 8; c++) {
+//                    printf("%.6f, ", AH(r, c));
+//                }
+//                printf("\n");
+//            }
+//            printf("h:%d,t:%d, AT:\n", h, t);
+//            for(auto r = 0; r < 8; r++) {
+//                for (auto c = 0; c < 8; c++) {
+//                    printf("%.6f, ", AT(r, c));
+//                }
+//                printf("\n");
+//            }
+
 
 			adHost[h+t*nFrames] = AH;
 			adTarget[h+t*nFrames] = AT;
@@ -186,6 +207,10 @@ void EnergyFunctional::setDeltaF(CalibHessian* HCalib)
 		f->delta = f->data->get_state_minus_stateZero().head<8>();
 		f->delta_prior = (f->data->get_state() - f->data->getPriorZero()).head<8>();
 
+
+//		std::cout << "f.delta:" << f->delta << std::endl;
+//		std::cout << "f.delta_prior:" << f->delta_prior << std::endl;
+
 		for(EFPoint* p : f->points)
 			p->deltaF = p->data->idepth-p->data->idepth_zero;
 	}
@@ -207,11 +232,179 @@ void EnergyFunctional::accumulateAF_MT(MatXX &H, VecX &b, bool MT)
 	else
 	{
 		accSSE_top_A->setZero(nFrames);
-		for(EFFrame* f : frames)
-			for(EFPoint* p : f->points)
-				accSSE_top_A->addPoint<0>(p,this);
+//        std::cout  << "self.c_deltaF: " << std::fixed << std::setprecision(8) << cDeltaF.transpose() << std::endl;
+//        std::cout  << "self.adHTdeltaF:" << std::endl;
+//        for (auto i = 0; i < nFrames * nFrames; i++) {
+//			std::cout  << "self.adHTdeltaF[" << i << "]: " << std::fixed << std::setprecision(8) << adHTdeltaF[i] << std::endl;
+//        }
+
+
+//        std::ofstream resfile;
+//        resfile.open("/Users/yinr/Desktop/J_iter1.data");
+//        std::ofstream resfile_float;
+//        resfile_float.open("/Users/yinr/Desktop/J_iter1.float");
+//        union {
+//            float input;
+//            int output;
+//        } resdata;
+
+		for(EFFrame* f : frames) {
+            printf("***************f.frameID:%d, f.points.len():%d\n", f->frameID, f->points.size());
+            for (EFPoint *p : f->points) {
+                /*--------------------------------------------------*/
+                for(EFResidual* r : p->residualsAll) {
+                    if (r->isLinearized || !r->isActive()) continue;
+                    accSSE_top_A->addPoint<0>(p, this);
+
+                    /***********************************************/
+/*                    RawResidualJacobian* rJ = r->J;
+                    // resF
+                    for (int tmp = 0; tmp < 8; tmp++) {
+                        resdata.input = rJ->resF[tmp];
+//                        std::bitset<sizeof(float) * CHAR_BIT> bits(resdata.output);
+//                        resfile << bits << " ";
+                        resfile_float << std::fixed << std::setprecision(8) << resdata.input << " ";
+
+						resfile << *(uint32_t *)&(rJ->resF[tmp]) << " ";
+                    }
+
+                    // Jpdxi_0
+                    for (int tmp = 0; tmp < 6; tmp++) {
+                        resdata.input = rJ->Jpdxi[0][tmp];
+//                        std::bitset<sizeof(float) * CHAR_BIT> bits(resdata.output);
+//                        resfile << bits << " ";
+                        resfile_float << std::fixed << std::setprecision(8) << resdata.input << " ";
+
+						resfile << *(uint32_t *)&(rJ->Jpdxi[0][tmp]) << " ";
+                    }
+
+                    // Jpdxi_1
+                    for (int tmp = 0; tmp < 6; tmp++) {
+                        resdata.input = rJ->Jpdxi[1][tmp];
+//                        std::bitset<sizeof(float) * CHAR_BIT> bits(resdata.output);
+//                        resfile << bits << " ";
+                        resfile_float << std::fixed << std::setprecision(8) << resdata.input << " ";
+
+						resfile << *(uint32_t *)&(rJ->Jpdxi[1][tmp]) << " ";
+                    }
+
+                    // Jpdc_0
+                    for (int tmp = 0; tmp < 4; tmp++) {
+                        resdata.input = rJ->Jpdc[0][tmp];
+//                        std::bitset<sizeof(float) * CHAR_BIT> bits(resdata.output);
+//                        resfile << bits << " ";
+                        resfile_float << std::fixed << std::setprecision(8) << resdata.input << " ";
+
+						resfile << *(uint32_t *)&(rJ->Jpdc[0][tmp]) << " ";
+                    }
+
+                    // Jpdc_1
+                    for (int tmp = 0; tmp < 4; tmp++) {
+                        resdata.input = rJ->Jpdc[1][tmp];
+//                        std::bitset<sizeof(float) * CHAR_BIT> bits(resdata.output);
+//                        resfile << bits << " ";
+                        resfile_float << std::fixed << std::setprecision(8) << resdata.input << " ";
+
+						resfile << *(uint32_t *)&(rJ->Jpdc[1][tmp]) << " ";
+                    }
+
+                    // Jpdd
+                    for (int tmp = 0; tmp < 2; tmp++) {
+                        resdata.input = rJ->Jpdd[tmp];
+//                        std::bitset<sizeof(float) * CHAR_BIT> bits(resdata.output);
+//                        resfile << bits << " ";
+                        resfile_float << std::fixed << std::setprecision(8) << resdata.input << " ";
+
+						resfile << *(uint32_t *)&(rJ->Jpdd[tmp]) << " ";
+                    }
+
+                    // JIdx_0
+                    for (int tmp = 0; tmp < 8; tmp++) {
+                        resdata.input = rJ->JIdx[0][tmp];
+//                        std::bitset<sizeof(float) * CHAR_BIT> bits(resdata.output);
+//                        resfile << bits << " ";
+                        resfile_float << std::fixed << std::setprecision(8) << resdata.input << " ";
+
+						resfile << *(uint32_t *)&(rJ->JIdx[0][tmp]) << " ";
+                    }
+
+                    // JIdx_1
+                    for (int tmp = 0; tmp < 8; tmp++) {
+                        resdata.input = rJ->JIdx[1][tmp];
+//                        std::bitset<sizeof(float) * CHAR_BIT> bits(resdata.output);
+//                        resfile << bits << " ";
+                        resfile_float << std::fixed << std::setprecision(8) << resdata.input << " ";
+
+						resfile << *(uint32_t *)&(rJ->JIdx[1][tmp]) << " ";
+                    }
+
+                    // JabF_0
+                    for (int tmp = 0; tmp < 8; tmp++) {
+                        resdata.input = rJ->JabF[0][tmp];
+//                        std::bitset<sizeof(float) * CHAR_BIT> bits(resdata.output);
+//                        resfile << bits << " ";
+                        resfile_float << std::fixed << std::setprecision(8) << resdata.input << " ";
+
+						resfile << *(uint32_t *)&(rJ->JabF[0][tmp]) << " ";
+                    }
+
+                    // JabF_1
+                    for (int tmp = 0; tmp < 8; tmp++) {
+                        resdata.input = rJ->JabF[1][tmp];
+//                        std::bitset<sizeof(float) * CHAR_BIT> bits(resdata.output);
+//                        resfile << bits << " ";
+                        resfile_float << std::fixed << std::setprecision(8) << resdata.input << " ";
+
+						resfile << *(uint32_t *)&(rJ->JabF[1][tmp]) << " ";
+                    }
+
+                    // JIdx2
+                    for (int tmp = 0; tmp < 4; tmp++) {
+                        resdata.input = rJ->JIdx2(tmp/2, tmp%2);
+//                        std::bitset<sizeof(float) * CHAR_BIT> bits(resdata.output);
+//                        resfile << bits << " ";
+                        resfile_float << std::fixed << std::setprecision(8) << resdata.input << " ";
+
+						resfile << *(uint32_t *)&(rJ->JIdx2(tmp/2, tmp%2)) << " ";
+                    }
+
+                    // JabJIdx
+                    for (int tmp = 0; tmp < 4; tmp++) {
+                        resdata.input = rJ->JabJIdx(tmp/2, tmp%2);
+//                        std::bitset<sizeof(float) * CHAR_BIT> bits(resdata.output);
+//                        resfile << bits << " ";
+                        resfile_float << std::fixed << std::setprecision(8) << resdata.input << " ";
+
+						resfile << *(uint32_t *)&(rJ->JabJIdx(tmp/2, tmp%2)) << " ";
+                    }
+
+                    // Jab2
+                    for (int tmp = 0; tmp < 4; tmp++) {
+                        resdata.input = rJ->Jab2(tmp/2, tmp%2);
+//                        std::bitset<sizeof(float) * CHAR_BIT> bits(resdata.output);
+//                        resfile << bits << " ";
+                        resfile_float << std::fixed << std::setprecision(8) << resdata.input << " ";
+
+						resfile << *(uint32_t *)&(rJ->Jab2(tmp/2, tmp%2)) << " ";
+                    }
+                    resfile << std::endl;
+                    resfile_float << std::endl; */
+                }
+
+//				return;
+			}
+        }
+//        resfile.close();
+//        resfile_float.close();
+
+
+//        printf("*********************** accSSE_top_A stitch_double_MT ***********************\n");
 		accSSE_top_A->stitchDoubleMT(red,H,b,this,false,false);
+//        std::cout << "H:" << std::endl << std::fixed << std::setprecision(8) << H << std::endl;
+//        std::cout << "b:" << std::endl << std::fixed << std::setprecision(8) << b << std::endl;
+
 		resInA = accSSE_top_A->nres[0];
+//        printf("resInA:%d\n", resInA);
 	}
 }
 
@@ -229,11 +422,14 @@ void EnergyFunctional::accumulateLF_MT(MatXX &H, VecX &b, bool MT)
 	else
 	{
 		accSSE_top_L->setZero(nFrames);
+//        printf("*********************** accSSE_top_L add_point ***********************\n");
 		for(EFFrame* f : frames)
 			for(EFPoint* p : f->points)
 				accSSE_top_L->addPoint<1>(p,this);
+//        printf("*********************** accSSE_top_L stitch_double_MT ***********************\n");
 		accSSE_top_L->stitchDoubleMT(red,H,b,this,true,false);
 		resInL = accSSE_top_L->nres[0];
+//        printf("resInL:%d\n", resInL);
 	}
 }
 
@@ -256,6 +452,7 @@ void EnergyFunctional::accumulateSCF_MT(MatXX &H, VecX &b, bool MT)
 		for(EFFrame* f : frames)
 			for(EFPoint* p : f->points)
 				accSSE_bot->addPoint(p, true);
+//        printf("*********************** accSSE_bot stitch_double_MT ***********************\n");
 		accSSE_bot->stitchDoubleMT(red, H, b,this,false);
 	}
 }
@@ -269,6 +466,7 @@ void EnergyFunctional::resubstituteF_MT(VecX x, CalibHessian* HCalib, bool MT)
 
 	Mat18f* xAd = new Mat18f[nFrames*nFrames];
 	VecCf cstep = xF.head<CPARS>();
+//	std::cout << "cstep:" << std::fixed << std::setprecision(8) << cstep.transpose() << std::endl;
 	for(EFFrame* h : frames)
 	{
 		h->data->step.head<8>() = - x.segment<8>(CPARS+8*h->idx);
@@ -297,6 +495,7 @@ void EnergyFunctional::resubstituteFPt(
 
 		int ngoodres = 0;
 		for(EFResidual* r : p->residualsAll) if(r->isActive()) ngoodres++;
+//		printf("***********resubstituteFPt: k[%d]ngoodres:%d\n", k, ngoodres);
 		if(ngoodres==0)
 		{
 			p->data->step = 0;
@@ -412,7 +611,12 @@ double EnergyFunctional::calcLEnergyF_MT()
 	return E+red->stats[0];
 }
 
-
+void EnergyFunctional::printConnectMap() {
+	for (auto it = connectivityMap.begin(); it != connectivityMap.end(); ++it) {
+		Eigen::Vector2i value = it->second;
+//		std::cout << it->first << ": (" << value[0] << ", " << value[1] << ")" << '\n';
+	}
+}
 
 EFResidual* EnergyFunctional::insertResidual(PointFrameResidual* r)
 {
@@ -785,15 +989,34 @@ void EnergyFunctional::solveSystemF(int iteration, double lambda, CalibHessian* 
 	VecX  bL_top, bA_top, bM_top, b_sc;
 
 	accumulateAF_MT(HA_top, bA_top,multiThreading);
+//	{
+//		printf("accumulateAF_MT - HA_top:\n");
+//		std::cout << std::fixed << std::setprecision(8) << HA_top << std::endl;
+//		printf("accumulateAF_MT - bA_top:\n");
+//		std::cout << std::fixed << std::setprecision(8) << bA_top << std::endl;
+//	}
 
 
 	accumulateLF_MT(HL_top, bL_top,multiThreading);
+//	{
+//		printf("accumulateLF_MT - HL_top:\n");
+//		std::cout << std::fixed << std::setprecision(8) << HL_top << std::endl;
+//		printf("accumulateLF_MT - bL_top:\n");
+//		std::cout << std::fixed << std::setprecision(8) << bL_top << std::endl;
+//	}
 
 
 
 	accumulateSCF_MT(H_sc, b_sc,multiThreading);
+//	{
+//		printf("accumulateSCF_MT - H_sc:\n");
+//		std::cout << std::fixed << std::setprecision(8) << H_sc << std::endl;
+//		printf("accumulateSCF_MT - b_sc:\n");
+//		std::cout << std::fixed << std::setprecision(8) << b_sc << std::endl;
+//	}
 
 
+//	std::cout << "getStitchedDeltaF: " << std::fixed << std::setprecision(8) << getStitchedDeltaF() << std::endl;
 
 	bM_top = (bM+ HM * getStitchedDeltaF());
 
@@ -850,6 +1073,13 @@ void EnergyFunctional::solveSystemF(int iteration, double lambda, CalibHessian* 
 	}
 
 
+//	std::cout << "HFinal_top:" << std::endl << std::fixed << std::setprecision(8) << HFinal_top << std::endl;
+//	std::cout << "bFinal_top:" << std::endl << std::fixed << std::setprecision(8) << bFinal_top << std::endl;
+
+
+//	std::cout << "self.lastHS: " << std::fixed << std::setprecision(8) << lastHS << std::endl;
+//	std::cout << "self.lastbs: " << std::fixed << std::setprecision(8) << lastbS << std::endl;
+
 
 
 
@@ -887,17 +1117,22 @@ void EnergyFunctional::solveSystemF(int iteration, double lambda, CalibHessian* 
 	}
 	else
 	{
+//		std::cout << "HFinal_top.diagonal(): \n" << std::fixed << std::setprecision(8) << HFinal_top.diagonal() << std::endl;
 		VecX SVecI = (HFinal_top.diagonal()+VecX::Constant(HFinal_top.cols(), 10)).cwiseSqrt().cwiseInverse();
+//        std::cout << "SVecI: " << std::fixed << std::setprecision(8) << SVecI << std::endl;
 		MatXX HFinalScaled = SVecI.asDiagonal() * HFinal_top * SVecI.asDiagonal();
+//		std::cout << "HFinalScaled: " << std::fixed << std::setprecision(8) << HFinalScaled << std::endl;
+//		std::cout << "b_to_solve: " << std::fixed << std::setprecision(8) << SVecI.asDiagonal() * bFinal_top << std::endl;
 		x = SVecI.asDiagonal() * HFinalScaled.ldlt().solve(SVecI.asDiagonal() * bFinal_top);//  SVec.asDiagonal() * svd.matrixV() * Ub;
 	}
 
-
+//	std::cout << "x: " << x.transpose() << std::endl;
 
 	if((setting_solverMode & SOLVER_ORTHOGONALIZE_X) || (iteration >= 2 && (setting_solverMode & SOLVER_ORTHOGONALIZE_X_LATER)))
 	{
 		VecX xOld = x;
 		orthogonalize(&x, 0);
+//		std::cout << "orthogonalize: x: " << x.transpose() << std::endl;
 	}
 
 

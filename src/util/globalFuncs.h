@@ -28,6 +28,8 @@
 #include "util/NumType.h"
 #include "IOWrapper/ImageDisplay.h"
 #include "fstream"
+#include "iostream"
+#include <iomanip>
 
 namespace dso
 {
@@ -87,6 +89,30 @@ EIGEN_ALWAYS_INLINE Eigen::Vector3f getInterpolatedElement33(const Eigen::Vector
 	        + (dx-dxdy) * *(const Eigen::Vector3f*)(bp+1)
 			+ (1-dx-dy+dxdy) * *(const Eigen::Vector3f*)(bp);
 }
+
+
+	EIGEN_ALWAYS_INLINE Eigen::Vector3f getInterpolatedElement33_print(const Eigen::Vector3f* const mat, const float x, const float y, const int width)
+	{
+		int ix = (int)x;
+		int iy = (int)y;
+		float dx = x - ix;
+		float dy = y - iy;
+		float dxdy = dx*dy;
+		const Eigen::Vector3f* bp = mat +ix+iy*width;
+
+		printf("dx:%.6f, dy:%.6f, dxdy:%.6f\n", dx, dy, dxdy);
+		std::cout << "mat[index + 1 + width]:" << std::fixed << std::setprecision(6) << (*(const Eigen::Vector3f*)(bp+1+width)).transpose() << std::endl;
+		std::cout << "mat[index + width]:" << std::fixed << std::setprecision(6) << (*(const Eigen::Vector3f*)(bp+width)).transpose() << std::endl;
+		std::cout << "mat[index + 1]:" << std::fixed << std::setprecision(6) << (*(const Eigen::Vector3f*)(bp+1)).transpose() << std::endl;
+		std::cout << "mat[index]:" << std::fixed << std::setprecision(6) << (*(const Eigen::Vector3f*)(bp)).transpose();
+
+
+		return dxdy * *(const Eigen::Vector3f*)(bp+1+width)
+			   + (dy-dxdy) * *(const Eigen::Vector3f*)(bp+width)
+			   + (dx-dxdy) * *(const Eigen::Vector3f*)(bp+1)
+			   + (1-dx-dy+dxdy) * *(const Eigen::Vector3f*)(bp);
+	}
+
 
 EIGEN_ALWAYS_INLINE Eigen::Vector3f getInterpolatedElement33OverAnd(const Eigen::Vector3f* const mat, const bool* overMat, const float x, const float y, const int width, bool& over_out)
 {
@@ -167,6 +193,7 @@ EIGEN_ALWAYS_INLINE Eigen::Vector3f getInterpolatedElement33BiLin(const Eigen::V
 {
 	int ix = (int)x;
 	int iy = (int)y;
+
 	const Eigen::Vector3f* bp = mat +ix+iy*width;
 
 	float tl = (*(bp))[0];

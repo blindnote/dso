@@ -128,6 +128,9 @@ public:
 		for(int h=0;h<nframes[0];h++)
 		{
 			int hIdx = CPARS+h*8;
+//			std::cout << "H.block<8,CPARS>(hIdx,0).transpose():"
+//					  << std::fixed << std::setprecision(8) << H.block<8,CPARS>(hIdx,0).transpose() << std::endl;
+
 			H.block<CPARS,8>(0,hIdx).noalias() = H.block<8,CPARS>(hIdx,0).transpose();
 		}
 	}

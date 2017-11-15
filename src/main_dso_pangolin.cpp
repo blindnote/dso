@@ -21,8 +21,6 @@
 * along with DSO. If not, see <http://www.gnu.org/licenses/>.
 */
 
-
-
 #include <thread>
 #include <locale.h>
 #include <signal.h>
@@ -108,6 +106,7 @@ void settingsDefault(int preset)
 				"- original image resolution\n", preset==0 ? "no " : "1x");
 
 		playbackSpeed = (preset==0 ? 0 : 1);
+		//playbackSpeed = 1;
 		preload = preset==1;
 		setting_desiredImmatureDensity = 1500;
 		setting_desiredPointDensity = 2000;
@@ -262,7 +261,7 @@ void parseArgument(char* arg)
 	if(1==sscanf(arg,"end=%d",&option))
 	{
 		end = option;
-		printf("END AT %d!\n",start);
+		printf("END AT %d!\n",end);
 		return;
 	}
 
@@ -365,6 +364,7 @@ int main( int argc, char** argv )
 
 	ImageFolderReader* reader = new ImageFolderReader(source, calib, gammaCalib, vignette);
 	reader->setGlobalCalibration();
+    //print_global_calib();
 
 
 
@@ -439,7 +439,7 @@ int main( int argc, char** argv )
     // to make MacOS happy: run this in dedicated thread -- and use this one to run the GUI.
 	fullSystem->setSfmInitializer(reader->undistort->getK(), sfmInitImageNames, sfmInitImages);
     std::thread runthread([&]() {
-		  //usleep(10*1000*1000);
+		  // usleep(10*1000*1000);
 
 		  if (fullSystem->GetFirstFrameIndex() != -1 &&
 			  fullSystem->GetSecondFrameIndex() != -1)
@@ -467,7 +467,7 @@ int main( int argc, char** argv )
                 timesToPlayAt.push_back(timesToPlayAt.back() +  fabs(tsThis-tsPrev)/playbackSpeed);
             }
         }
-
+		//printf("\n....... timesToPlayAt[100]:%f ", timesToPlayAt[100]);
 
         std::vector<ImageAndExposure*> preloadedImages;
         if(preload)
@@ -486,6 +486,7 @@ int main( int argc, char** argv )
         double sInitializerOffset=0;
 
 
+		//printf("........playbackspeed:%f\n", playbackSpeed);
         for(int ii=0;ii<(int)idsToPlay.size(); ii++)
         {
             if(!fullSystem->initialized)	// if not initialized: reset start time.

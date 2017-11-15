@@ -51,10 +51,14 @@ namespace dso
 
 void FullSystem::linearizeAll_Reductor(bool fixLinearization, std::vector<PointFrameResidual*>* toRemove, int min, int max, Vec10* stats, int tid)
 {
+//	std::ofstream myfile;
+//	myfile.open ("/Users/yinr/Desktop/cpp_linearize_all.txt");
+
 	for(int k=min;k<max;k++)
 	{
 		PointFrameResidual* r = activeResiduals[k];
-		(*stats)[0] += r->linearize(&Hcalib);
+		(*stats)[0] += r->linearize(&Hcalib,  false);
+//		myfile << "after[" << k << "]: stats[0]=" << std::fixed << std::setprecision(8) << (*stats)[0] << std::endl;
 
 		if(fixLinearization)
 		{
@@ -78,17 +82,58 @@ void FullSystem::linearizeAll_Reductor(bool fixLinearization, std::vector<PointF
 			}
 			else
 			{
+//                printf("to_remove[%d] u:%.2f, v:%.2f\n", activeResiduals[k]->point->u, activeResiduals[k]->point->v);
+//				myfile << "to_remove[" << k << "] u:" << std::fixed << std::setprecision(2)
+//					   << activeResiduals[k]->point->u << ", v:" << activeResiduals[k]->point->v << std::endl;
 				toRemove[tid].push_back(activeResiduals[k]);
 			}
 		}
 	}
+//	myfile.close();
 }
 
 
 void FullSystem::applyRes_Reductor(bool copyJacobians, int min, int max, Vec10* stats, int tid)
 {
-	for(int k=min;k<max;k++)
+//	std::ofstream  myfile;
+//	myfile.open("/Users/yinr/Desktop/cpp_efresiduals_JpJdF.txt");
+
+	for(int k=min;k<max;k++) {
 		activeResiduals[k]->applyRes(true);
+
+//		myfile << "[" << k << "] " << std::fixed << std::setprecision(8)
+//			   << activeResiduals[k]->efResidual->JpJdF[0] << ", "
+//               << activeResiduals[k]->efResidual->JpJdF[1] << ", "
+//               << activeResiduals[k]->efResidual->JpJdF[2] << ", "
+//               << activeResiduals[k]->efResidual->JpJdF[3] << ", "
+//               << activeResiduals[k]->efResidual->JpJdF[4] << ", "
+//               << activeResiduals[k]->efResidual->JpJdF[5] << ", "
+//               << activeResiduals[k]->efResidual->JpJdF[6] << ", "
+//               << activeResiduals[k]->efResidual->JpJdF[7] << std::endl;
+
+//		if (k == 0) {
+//			std::cout << "....... hulalla" << std::endl;
+//			activeResiduals[k]->efResidual->J->printdata();
+//
+//			Vec2f JI_JI_Jd = activeResiduals[k]->efResidual->J->JIdx2 * activeResiduals[k]->efResidual->J->Jpdd;
+//
+//			Vec2f res = activeResiduals[k]->efResidual->J->JabJIdx*activeResiduals[k]->efResidual->J->Jpdd;
+//			std::cout << "JI_JI_Jd: " << std::fixed << std::setprecision(8) << JI_JI_Jd.transpose() << std::endl;
+//			std::cout << "res: " << std::fixed << std::setprecision(8) << res.transpose() << std::endl;
+//
+//
+//			std::cout << "[" << k << "] " << std::fixed << std::setprecision(8)
+//				   << activeResiduals[k]->efResidual->JpJdF[0] << ", "
+//				   << activeResiduals[k]->efResidual->JpJdF[1] << ", "
+//				   << activeResiduals[k]->efResidual->JpJdF[2] << ", "
+//				   << activeResiduals[k]->efResidual->JpJdF[3] << ", "
+//				   << activeResiduals[k]->efResidual->JpJdF[4] << ", "
+//				   << activeResiduals[k]->efResidual->JpJdF[5] << ", "
+//				   << activeResiduals[k]->efResidual->JpJdF[6] << ", "
+//				   << activeResiduals[k]->efResidual->JpJdF[7] << std::endl;
+//		}
+	}
+//	myfile.close();
 }
 void FullSystem::setNewFrameEnergyTH()
 {
@@ -98,12 +143,17 @@ void FullSystem::setNewFrameEnergyTH()
 	allResVec.reserve(activeResiduals.size()*2);
 	FrameHessian* newFrame = frameHessians.back();
 
+//	std::ofstream  myfile;
+//	myfile.open("/Users/yinr/Desktop/cpp_set_nf_energyTH.txt");
+
 	for(PointFrameResidual* r : activeResiduals)
 		if(r->state_NewEnergyWithOutlier >= 0 && r->target == newFrame)
 		{
 			allResVec.push_back(r->state_NewEnergyWithOutlier);
+//			myfile << std::fixed << std::setprecision(8) << r->state_NewEnergyWithOutlier << std::endl;
 
 		}
+//	myfile.close();
 
 	if(allResVec.size()==0)
 	{
@@ -113,12 +163,14 @@ void FullSystem::setNewFrameEnergyTH()
 
 
 	int nthIdx = setting_frameEnergyTHN*allResVec.size();
+	printf("self.all_res_vec.len(): %d, nth_idx: %d\n", allResVec.size(), nthIdx);
 
 	assert(nthIdx < (int)allResVec.size());
 	assert(setting_frameEnergyTHN < 1);
 
 	std::nth_element(allResVec.begin(), allResVec.begin()+nthIdx, allResVec.end());
 	float nthElement = sqrtf(allResVec[nthIdx]);
+    printf("nthElement:%.8f\n", nthElement);
 
 
 
@@ -129,15 +181,27 @@ void FullSystem::setNewFrameEnergyTH()
 	newFrame->frameEnergyTH = 26.0f*setting_frameEnergyTHConstWeight + newFrame->frameEnergyTH*(1-setting_frameEnergyTHConstWeight);
 	newFrame->frameEnergyTH = newFrame->frameEnergyTH*newFrame->frameEnergyTH;
 	newFrame->frameEnergyTH *= setting_overallEnergyTHWeight*setting_overallEnergyTHWeight;
+    printf("newFrame->frameEnergyTH:%.8f\n", newFrame->frameEnergyTH);
 
 
 
-//
-//	int good=0,bad=0;
-//	for(float f : allResVec) if(f<newFrame->frameEnergyTH) good++; else bad++;
-//	printf("EnergyTH: mean %f, median %f, result %f (in %d, out %d)! \n",
-//			meanElement, nthElement, sqrtf(newFrame->frameEnergyTH),
-//			good, bad);
+
+	int good=0,bad=0;
+    float meanElement = sqrtf(allResVec[allResVec.size()/2]);
+//    std::sort(allResVec.begin(), allResVec.end());
+	for(float f : allResVec)  {
+        if(f<newFrame->frameEnergyTH) {
+            good++;
+//            myfile << std::fixed << std::setprecision(8) << f << ": good" << std::endl;
+        } else {
+            bad++;
+//            myfile << std::fixed << std::setprecision(8) << f << ": bad" << std::endl;
+        }
+    }
+//    myfile.close();
+	printf("EnergyTH: mean %f, median %f, result %f (in %d, out %d)! \n",
+			meanElement, nthElement, sqrtf(newFrame->frameEnergyTH),
+			good, bad);
 }
 Vec3 FullSystem::linearizeAll(bool fixLinearization)
 {
@@ -157,6 +221,7 @@ Vec3 FullSystem::linearizeAll(bool fixLinearization)
 	else
 	{
 		Vec10 stats;
+		printf("activeResiduals.size():%d", activeResiduals.size());
 		linearizeAll_Reductor(fixLinearization, toRemove, 0,activeResiduals.size(),&stats,0);
 		lastEnergyP = stats[0];
 	}
@@ -202,10 +267,11 @@ Vec3 FullSystem::linearizeAll(bool fixLinearization)
 					}
 			}
 		}
-		//printf("FINAL LINEARIZATION: removed %d / %d residuals!\n", nResRemoved, (int)activeResiduals.size());
+		printf("FINAL LINEARIZATION: removed %d / %d residuals!\n", nResRemoved, (int)activeResiduals.size());
 
 	}
 
+    printf("last_energy_P:%.8f, last_energy_R:%.8f, num:%d\n", lastEnergyP, lastEnergyR, num);
 	return Vec3(lastEnergyP, lastEnergyR, num);
 }
 
@@ -405,7 +471,7 @@ void FullSystem::printOptRes(const Vec3 &res, double resL, double resM, double r
 }
 
 
-float FullSystem::optimize(int mnumOptIts)
+float FullSystem:: optimize(int mnumOptIts)
 {
 
 	if(frameHessians.size() < 2) return 0;
@@ -437,6 +503,8 @@ float FullSystem::optimize(int mnumOptIts)
 			}
 			numPoints++;
 		}
+    printf("numLRes:%d, numPoints:%d\n", numLRes, numPoints);
+
 
     if(!setting_debugout_runquiet)
         printf("OPTIMIZE %d pts, %d active res, %d lin res!\n",ef->nPoints,(int)activeResiduals.size(), numLRes);
@@ -445,7 +513,7 @@ float FullSystem::optimize(int mnumOptIts)
 	Vec3 lastEnergy = linearizeAll(false);
 	double lastEnergyL = calcLEnergy();
 	double lastEnergyM = calcMEnergy();
-
+//    printf("lastEnergyL:%.8f, lastEnergyM:%.8f\n", lastEnergyL, lastEnergyM);
 
 
 
@@ -465,7 +533,6 @@ float FullSystem::optimize(int mnumOptIts)
 	//debugPlotTracking();
 
 
-
 	double lambda = 1e-1;
 	float stepsize=1;
 	VecX previousX = VecX::Constant(CPARS+ 8*frameHessians.size(), NAN);
@@ -473,8 +540,14 @@ float FullSystem::optimize(int mnumOptIts)
 	{
 		// solve!
 		backupState(iteration!=0);
+		std::cout << "...HCalib.state_backup: " << std::fixed << std::setprecision(8) << Hcalib.value_backup.transpose() << std::endl;
 		//solveSystemNew(0);
 		solveSystem(iteration, lambda);
+//		printf("iter[%d] lastX:", iteration);
+		std::cout << std::fixed << std::setprecision(8) << ef->lastX.transpose() << std::endl;
+		printf("lastX.norm():%.8f\n", ef->lastX.norm());
+//		if (iteration == 1) { return NAN; }
+
 		double incDirChange = (1e-20 + previousX.dot(ef->lastX)) / (1e-20 + previousX.norm() * ef->lastX.norm());
 		previousX = ef->lastX;
 
@@ -546,7 +619,6 @@ float FullSystem::optimize(int mnumOptIts)
 	}
 
 
-
 	Vec10 newStateZero = Vec10::Zero();
 	newStateZero.segment<2>(6) = frameHessians.back()->get_state().segment<2>(6);
 
@@ -613,6 +685,11 @@ void FullSystem::solveSystem(int iteration, double lambda)
 			ef->lastNullspaces_scale,
 			ef->lastNullspaces_affA,
 			ef->lastNullspaces_affB);
+
+//	for (auto i = 0; i < ef->lastNullspaces_forLogging.size(); i++) {
+//		printf("self.ef.last_null_spaces_for_logging[%d]: \n", i);
+//		std::cout << std::fixed << std::setprecision(8) << ef->lastNullspaces_forLogging[i].transpose() << std::endl;
+//	}
 
 	ef->solveSystemF(iteration, lambda,&Hcalib);
 }

@@ -364,16 +364,16 @@ struct CalibHessian
 	{
 		this->value_scaled = value_scaled;
 		this->value_scaledf = this->value_scaled.cast<float>();
-		value[0] = SCALE_F_INVERSE * value_scaled[0];
-		value[1] = SCALE_F_INVERSE * value_scaled[1];
-		value[2] = SCALE_C_INVERSE * value_scaled[2];
-		value[3] = SCALE_C_INVERSE * value_scaled[3];
+		value[0] = SCALE_F_INVERSE * value_scaled[0];		// (1.0 / 50.0) * fx
+		value[1] = SCALE_F_INVERSE * value_scaled[1];		// (1.0 / 50.0) * fy
+		value[2] = SCALE_C_INVERSE * value_scaled[2];		// (1.0 / 50.0) * cx
+		value[3] = SCALE_C_INVERSE * value_scaled[3];		// (1.0 / 50.0) * cy
 
 		this->value_minus_value_zero = this->value - this->value_zero;
-		this->value_scaledi[0] = 1.0f / this->value_scaledf[0];
-		this->value_scaledi[1] = 1.0f / this->value_scaledf[1];
-		this->value_scaledi[2] = - this->value_scaledf[2] / this->value_scaledf[0];
-		this->value_scaledi[3] = - this->value_scaledf[3] / this->value_scaledf[1];
+		this->value_scaledi[0] = 1.0f / this->value_scaledf[0];		// 1.0 / fx
+		this->value_scaledi[1] = 1.0f / this->value_scaledf[1];		// 1.0 / fy
+		this->value_scaledi[2] = - this->value_scaledf[2] / this->value_scaledf[0];		// - cx / fx
+		this->value_scaledi[3] = - this->value_scaledf[3] / this->value_scaledf[1];		// - cy / fy
 	};
 
 

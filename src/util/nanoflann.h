@@ -67,6 +67,8 @@
   */
 
 #pragma once
+#include <fstream>
+#include <iomanip>
 #include <vector>
 #include <cassert>
 #include <algorithm>
@@ -107,7 +109,7 @@ namespace nanoflann
 			dists = dists_;
 			count = 0;
             if (capacity)
-                dists[capacity-1] = (std::numeric_limits<DistanceType>::max)();
+                dists[capacity - 1] = (std::numeric_limits<DistanceType>::max)();
 		}
 
 		inline CountType size() const
@@ -765,6 +767,8 @@ namespace nanoflann
 	public:
 		typedef typename Distance::ElementType  ElementType;
 		typedef typename Distance::DistanceType DistanceType;
+//	private:
+//		std::ofstream myfile;
 	protected:
 
 		/**
@@ -857,10 +861,12 @@ namespace nanoflann
 
 			// Create a permutable array of indices to the input vectors.
 			init_vind();
+
+//			myfile.open ("/Users/yinr/Desktop/kdtree_dso_cpp.txt");
 		}
 
 		/** Standard destructor */
-		~KDTreeSingleIndexAdaptor() { }
+		~KDTreeSingleIndexAdaptor() { /* myfile.close(); */ }
 
 		/** Frees the previously-built index. Automatically called within buildIndex(). */
 		void freeIndex()
@@ -880,6 +886,9 @@ namespace nanoflann
 			m_size_at_index_build = m_size;
 			if(m_size == 0) return;
 			computeBoundingBox(root_bbox);
+//			printf("root_bbox[0].low:%f, root_bbox[0].high:%f, root_bbox[1].low:%f, root_bbox[1].high:%f\n",
+//					root_bbox[0].low, root_bbox[0].high,
+//					root_bbox[1].low, root_bbox[1].high);
 			root_node = divideTree(0, m_size, root_bbox );   // construct the tree
 		}
 
@@ -1074,11 +1083,17 @@ namespace nanoflann
 						if (bbox[i].high<dataset_get(vind[k],i)) bbox[i].high=dataset_get(vind[k],i);
 					}
 				}
+
+//				myfile << "LEAF:(left:" << left << ",right:" << right << "),bbox:([0]:(low:" << std::fixed << std::setprecision(8)
+//					   << bbox[0].low << ",high:" << bbox[0].high << "),[1]:(low:" << bbox[1].low << ",high:" << bbox[1].high << "))"
+//					   << std::endl;
+//                myfile << "LEAF:(left:" << node->lr.left << ",right:" << node->lr.right << ")" << std::endl;
 			}
 			else {
 				IndexType idx;
 				int cutfeat;
 				DistanceType cutval;
+//				printf("left:%d, right:%d\n", left, right);
 				middleSplit_(&vind[0]+left, right-left, idx, cutfeat, cutval, bbox);
 
 				node->sub.divfeat = cutfeat;
@@ -1098,6 +1113,13 @@ namespace nanoflann
 					bbox[i].low = std::min(left_bbox[i].low, right_bbox[i].low);
 					bbox[i].high = std::max(left_bbox[i].high, right_bbox[i].high);
 				}
+
+//				myfile << "NONLEAF:(divfea:" << cutfeat << ",divlow:" << node->sub.divlow << ",divhigh:" << node->sub.divhigh
+//					   << "),bbox:([0]:(low:" << bbox[0].low << ",high:" <<  bbox[0].high
+//					   << "),[1]:(low:" << bbox[1].low << ",high:" << bbox[1].high << "))" << std::endl;
+//
+//                myfile << "NONLEAF:(divfea:" << node->sub.divfeat << ",divlow:" << node->sub.divlow
+//                       << ",divhigh:" << node->sub.divhigh << ")" << std::endl;
 			}
 
 			return node;
@@ -1139,21 +1161,25 @@ namespace nanoflann
 					}
 				}
 			}
+//			printf("bbox[cutfeat].low: %f, bbox[cutfeat].high: %f", bbox[cutfeat].low, bbox[cutfeat].high);
 			// split in the middle
 			DistanceType split_val = (bbox[cutfeat].low+bbox[cutfeat].high)/2;
 			ElementType min_elem, max_elem;
 			computeMinMax(ind, count, cutfeat, min_elem, max_elem);
+//			printf("split_val:%f, min_elem:%f, max_elem:%f\n", split_val, min_elem, max_elem);
 
 			if (split_val<min_elem) cutval = min_elem;
 			else if (split_val>max_elem) cutval = max_elem;
 			else cutval = split_val;
-
+//			printf("max_spread:%f, cutfeat:%d, cutval:%f\n", max_spread, cutfeat, cutval);
 			IndexType lim1, lim2;
 			planeSplit(ind, count, cutfeat, cutval, lim1, lim2);
 
 			if (lim1>count/2) index = lim1;
 			else if (lim2<count/2) index = lim2;
 			else index = count/2;
+
+//			printf(" lim1:%d, lim2:%d, index: %d\n", lim1, lim2, index);
 		}
 
 
@@ -1173,8 +1199,22 @@ namespace nanoflann
 			IndexType right = count-1;
 			for (;; ) {
 				while (left<=right && dataset_get(ind[left],cutfeat)<cutval) ++left;
+//				printf("dataset_get(%d(left:%d), %d) = %f, cut_val:%f\n",
+//						ind[left], left, cutfeat,
+//						dataset_get(ind[left], cutfeat), cutval);
 				while (right && left<=right && dataset_get(ind[right],cutfeat)>=cutval) --right;
+//				printf("dataset_get(%d(right:%d), %d) = %f, cut_val:%f\n",
+//					   ind[right], right, cutfeat,
+//					   dataset_get(ind[right], cutfeat), cutval);
 				if (left>right || !right) break;  // "!right" was added to support unsigned Index types
+//                if (left > right) {
+//                    printf("l:%d < r:%d ....break\n", left, right);
+//                    break;
+//                }
+//                if (!right) {
+//                    printf("l:%d, r:%d = 0 ....break\n", left, right);
+//                    break;
+//                }
 				std::swap(ind[left], ind[right]);
 				++left;
 				--right;

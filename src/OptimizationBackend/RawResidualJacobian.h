@@ -27,6 +27,9 @@
  
 #include "util/NumType.h"
 
+#include <iostream>
+#include <iomanip>
+
 namespace dso
 {
 struct RawResidualJacobian
@@ -58,6 +61,22 @@ struct RawResidualJacobian
 	// = Jab^T * Jab (inner product). Only as a shorthand.
 	Mat22f Jab2;			// 2x2
 
+    void printdata() {
+        std::cout << "resF:" << std::endl << std::fixed << std::setprecision(8) << resF << std::endl;
+        std::cout << "Jpdxi[0]:" << std::endl << std::fixed << std::setprecision(8) << Jpdxi[0] << std::endl;
+        std::cout << "Jpdxi[1]:" << std::endl << std::fixed << std::setprecision(8) << Jpdxi[1] << std::endl;
+        std::cout << "Jpdc[0]:" << std::endl << std::fixed << std::setprecision(8) << Jpdc[0] << std::endl;
+        std::cout << "Jpdc[1]:" << std::endl << std::fixed << std::setprecision(8) << Jpdc[1] << std::endl;
+        std::cout << "Jpdd:" << std::endl << std::fixed << std::setprecision(8) << Jpdd << std::endl;
+        std::cout << "JIdx[0]:" << std::endl << std::fixed << std::setprecision(8) << JIdx[0] << std::endl;
+        std::cout << "JIdx[1]:" << std::endl << std::fixed << std::setprecision(8) << JIdx[1] << std::endl;
+        std::cout << "JabF[0]:" << std::endl << std::fixed << std::setprecision(8) << JabF[0] << std::endl;
+        std::cout << "JabF[1]:" << std::endl << std::fixed << std::setprecision(8) << JabF[1] << std::endl;
+        std::cout << "JIdx2:" << std::endl << std::fixed << std::setprecision(8) << JIdx2 << std::endl;
+        std::cout << "JabJIdx:" << std::endl << std::fixed << std::setprecision(8) << JabJIdx << std::endl;
+        std::cout << "Jab2:" << std::endl << std::fixed << std::setprecision(8) << Jab2 << std::endl;
+    }
 };
+
 }
 

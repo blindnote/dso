@@ -23,6 +23,8 @@
 
 
 #pragma once
+#include <iomanip>
+#include <fstream>
 #include "util/settings.h"
 #include "util/globalFuncs.h"
 #include "util/globalCalib.h"
@@ -344,11 +346,24 @@ private:
 	ImageAndExposure* getImage_internal(int id, int unused)
 	{
 		MinimalImageB* minimg = getImageRaw_internal(id, 0);
+
+
 		ImageAndExposure* ret2 = undistort->undistort<unsigned char>(
 				minimg,
 				(exposures.size() == 0 ? 1.0f : exposures[id]),
 				(timestamps.size() == 0 ? 0.0 : timestamps[id]));
-		delete minimg;
+
+//        std::ofstream myfile;
+//        myfile.open ("/Users/yinr/Desktop/undistort_dso_cpp.txt");
+//        for (auto y = 0; y < ret2->h; y++) {
+//            for (auto x = 0; x < ret2->w; x++) {
+//                myfile << y << "," << x << "," << std::fixed << std::setprecision(8)
+//                       << ret2->image[x + y * ret2->w] << std::endl;
+//            }
+//        }
+//        myfile.close();
+
+        delete minimg;
 		return ret2;
 	}
 

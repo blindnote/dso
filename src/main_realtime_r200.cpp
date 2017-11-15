@@ -407,12 +407,6 @@ int main( int argc, char** argv )
 
         runthread.join();
 
-        for(IOWrap::Output3DWrapper* ow : fullSystem->outputWrapper)
-        {
-            ow->join();
-            delete ow;
-        }
-
         free( newImage );
         delete rgbCallback;
 

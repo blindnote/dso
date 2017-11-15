@@ -48,9 +48,10 @@ bool iEpipolarSolver::RecoverFromAlignedPoints(const std::vector<cv::Point2d>& p
 //  cv::Mat R1(3, 3, CV_64FC1), R2(3, 3, CV_64FC1);
 //  cv::Mat t1(1, 3, CV_64FC1), t2(1, 3, CV_64FC1);
   cv::Mat triangulated_pts_mat;
-  int recover_pose_inliers_cnt = recoverPose(E, point2d_i_vec, point2d_j_vec,
-                                             mK, R, t, 40.0,
-                                             recover_masks, triangulated_pts_mat);
+//  int recover_pose_inliers_cnt = recoverPose(E, point2d_i_vec, point2d_j_vec,
+//                                             mK, R, t, 40.0,
+//                                             recover_masks, triangulated_pts_mat);
+  int recover_pose_inliers_cnt = 0;
 
   double percent = 100 * recover_pose_inliers_cnt / recover_masks.size();
   if ((recover_pose_inliers_cnt) < 10 || (percent < 50))

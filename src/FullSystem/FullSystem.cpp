@@ -236,7 +236,7 @@ void FullSystem::setGammaFunction(float* BInv)
 	// copy BInv.
 	memcpy(Hcalib.Binv, BInv, sizeof(float)*256);
 
-
+    //printf("........... SetGammaFunction ..........\n");
 	// invert.
 	for(int i=1;i<255;i++)
 	{
@@ -251,7 +251,9 @@ void FullSystem::setGammaFunction(float* BInv)
 				break;
 			}
 		}
+        // printf("%.2f  ", Hcalib.B[i]);
 	}
+    // printf("\n");
 	Hcalib.B[0] = 0;
 	Hcalib.B[255] = 255;
 }
@@ -363,6 +365,8 @@ Vec4 FullSystem::trackNewCoarse(FrameHessian* fh)
 			lastF_2_fh_tries.clear();
 			lastF_2_fh_tries.push_back(SE3());
 		}
+
+        std::cout << "lastF_2_fh_tries.size():" << lastF_2_fh_tries.size() << std::endl;
 	}
 
 
@@ -383,6 +387,8 @@ Vec4 FullSystem::trackNewCoarse(FrameHessian* fh)
 	{
 		AffLight aff_g2l_this = aff_last_2_l;
 		SE3 lastF_2_fh_this = lastF_2_fh_tries[i];
+        std::cout << "lastF_2_fh_tries[" << i << "]:" << std::endl << std::fixed << std::setprecision(8)
+                  << lastF_2_fh_this.matrix() << std::endl;
 		bool trackingIsGood = coarseTracker->trackNewestCoarse(
 				fh, lastF_2_fh_this, aff_g2l_this,
 				pyrLevelsUsed-1,
@@ -407,7 +413,8 @@ Vec4 FullSystem::trackNewCoarse(FrameHessian* fh)
 					coarseTracker->lastResiduals[4]);
 		}
 
-
+        printf("tracking_is_good:%s, self.coarse_tracker.last_residuals[0]:%.8f, achieved_res[0]:%.8f\n",
+               trackingIsGood ? "true" : "false", coarseTracker->lastResiduals[0], achievedRes[0]);
 		// do we have a new winner?
 		if(trackingIsGood && std::isfinite((float)coarseTracker->lastResiduals[0]) && !(coarseTracker->lastResiduals[0] >=  achievedRes[0]))
 		{
@@ -416,6 +423,7 @@ Vec4 FullSystem::trackNewCoarse(FrameHessian* fh)
 			aff_g2l = aff_g2l_this;
 			lastF_2_fh = lastF_2_fh_this;
 			haveOneGood = true;
+			std::cout << "flowVecs:" << std::endl << std::fixed << std::setprecision(8) << flowVecs << std::endl;
 		}
 
 		// take over achieved res (always).
@@ -487,8 +495,10 @@ void FullSystem::traceNewCoarse(FrameHessian* fh)
 	K(1,1) = Hcalib.fyl();
 	K(0,2) = Hcalib.cxl();
 	K(1,2) = Hcalib.cyl();
+//	std::cout << "K:" << std::endl << std::fixed << std::setprecision(8) << K << std::endl;
+	std::cout << "fh.PRE_worldToCam:" << std::endl << std::fixed << std::setprecision(8) << fh->PRE_worldToCam.matrix() << std::endl;
 
-	std::cout << "........ frameHessians.size():" << frameHessians.size() << std::endl;
+//	std::cout << "........ frameHessians.size():" << frameHessians.size() << std::endl;
 	for(FrameHessian* host : frameHessians)		// go through all active frames
 	{
 
@@ -498,10 +508,17 @@ void FullSystem::traceNewCoarse(FrameHessian* fh)
 
 		Vec2f aff = AffLight::fromToVecExposure(host->ab_exposure, fh->ab_exposure, host->aff_g2l(), fh->aff_g2l()).cast<float>();
 
+//		std::cout << "host->PRE_camToWorld:" << std::endl << std::fixed << std::setprecision(8) << host->PRE_camToWorld.matrix() << std::endl;
+//		std::cout << "hostToNew:" << std::endl << std::fixed << std::setprecision(8) << hostToNew.matrix() << std::endl;
+//
+//		std::cout << "KRKi:" << std::endl << std::fixed << std::setprecision(8) << KRKi << std::endl;
+//		std::cout << "Kt:" << std::endl << std::fixed << std::setprecision(8) << Kt.transpose() << std::endl;
+		std::cout << "aff: a:" << std::fixed << std::setprecision(8) << aff[0] << ", b:" << aff[1] << std::endl;
+
 		std::cout << "........ host->immaturePoints.size():" << host->immaturePoints.size() << std::endl;
 		for(ImmaturePoint* ph : host->immaturePoints)
 		{
-			ph->traceOn(fh, KRKi, Kt, aff, &Hcalib, false );
+			ph->traceOn(fh, KRKi, Kt, aff, &Hcalib, true );
 
 			if(ph->lastTraceStatus==ImmaturePointStatus::IPS_GOOD) trace_good++;
 			if(ph->lastTraceStatus==ImmaturePointStatus::IPS_BADCONDITION) trace_badcondition++;
@@ -589,6 +606,8 @@ void FullSystem::activatePointsMT()
 		Mat33f KRKi = (coarseDistanceMap->K[1] * fhToNew.rotationMatrix().cast<float>() * coarseDistanceMap->Ki[0]);
 		Vec3f Kt = (coarseDistanceMap->K[1] * fhToNew.translation().cast<float>());
 
+		printf(".......host.immaturepoints.count():%d\n", host->immaturePoints.size());
+
 
 		for(unsigned int i=0;i<host->immaturePoints.size();i+=1)
 		{
@@ -659,6 +678,7 @@ void FullSystem::activatePointsMT()
 //			(int)toOptimize.size(), immature_deleted, immature_notReady, immature_needMarg, immature_want, immature_margskip);
 
 	std::vector<PointHessian*> optimized; optimized.resize(toOptimize.size());
+	printf("....to_optimize.len():%d\n", toOptimize.size());
 
 	if(multiThreading)
 		treadReduce.reduce(boost::bind(&FullSystem::activatePointsMT_Reductor, this, &optimized, &toOptimize, _1, _2, _3, _4), 0, toOptimize.size(), 50);
@@ -770,7 +790,7 @@ void FullSystem::flagPointsForRemoval()
 					for(PointFrameResidual* r : ph->residuals)
 					{
 						r->resetOOB();
-						r->linearize(&Hcalib);
+						r->linearize(&Hcalib, false);
 						r->efResidual->isLinearized = false;
 						r->applyRes(true);
 						if(r->efResidual->isActive())
@@ -1013,12 +1033,33 @@ void FullSystem::addActiveFrame( ImageAndExposure* image, int id )
 		}
 		else if(coarseInitializer->trackFrame(fh, outputWrapper))	// if SNAPPED
 		{
-            std::cout << "----------> 1" << std::endl;
-			initializeFromInitializer(fh);
+			printf(" huhahahah ");
+//			return;
+//			{
+//				std::ofstream myfile0;
+//        		myfile0.open ("/Users/yinr/Desktop/cpp_latest_dIp_0.txt");
+//				std::ofstream myfile1;
+//				myfile1.open ("/Users/yinr/Desktop/cpp_latest_dIp_1.txt");
+//				std::ofstream myfile2;
+//				myfile2.open ("/Users/yinr/Desktop/cpp_latest_dIp_2.txt");
+//
+//				Eigen::Vector3f* dI_l = fh->dIp[0];
+//				for (auto idx = 0; idx < wG[0] * hG[0]; idx++) {
+//					myfile0 << "[" << idx << "]: " << std::fixed << std::setprecision(6) << dI_l[idx][0] << std::endl;
+//					myfile1 << "[" << idx << "]: " << std::fixed << std::setprecision(6) << dI_l[idx][1] << std::endl;
+//					myfile2 << "[" << idx << "]: " << std::fixed << std::setprecision(6) << dI_l[idx][2] << std::endl;
+//				}
+//
+//
+//        		myfile0.close();
+//				myfile1.close();
+//				myfile2.close();
+//			}
+
+
+		   	initializeFromInitializer(fh);
 			lock.unlock();
-            std::cout << "----------> 2" << std::endl;
 			deliverTrackedFrame(fh, true);
-            std::cout << "----------> 3" << std::endl;
 		}
 		else
 		{
@@ -1208,11 +1249,20 @@ void FullSystem::blockUntilMappingIsFinished()
 
 void FullSystem::makeNonKeyFrame( FrameHessian* fh)
 {
+	std::cout << "^^^^^^^^^^^^^^^ making non key frame ^^^^^^^^^^^^^^^" << std::endl;
 	// needs to be set by mapping thread. no lock required since we are in mapping thread.
 	{
 		boost::unique_lock<boost::mutex> crlock(shellPoseMutex);
 		assert(fh->shell->trackingRef != 0);
 		fh->shell->camToWorld = fh->shell->trackingRef->camToWorld * fh->shell->camToTrackingRef;
+
+//		std::cout << "fh->shell->trackingRef->camToWorld:" << std::endl << std::fixed << std::setprecision(8)
+//				  << fh->shell->trackingRef->camToWorld.matrix() << std::endl;
+//		std::cout << "fh->shell->trackingRef->camToWorld:" << std::endl << std::fixed << std::setprecision(8)
+//				  << fh->shell->camToTrackingRef.matrix() << std::endl;
+		std::cout << "fh->shell->camToWorld:" << std::endl << std::fixed << std::setprecision(8)
+				  << fh->shell->camToWorld.matrix() << std::endl;
+
 		fh->setEvalPT_scaled(fh->shell->camToWorld.inverse(),fh->shell->aff_g2l);
 	}
 
@@ -1227,8 +1277,23 @@ void FullSystem::makeKeyFrame( FrameHessian* fh)
 		boost::unique_lock<boost::mutex> crlock(shellPoseMutex);
 		assert(fh->shell->trackingRef != 0);
 		fh->shell->camToWorld = fh->shell->trackingRef->camToWorld * fh->shell->camToTrackingRef;
+//        std::cout << "fh->shell->trackingRef->camToWorld:" << std::endl << std::fixed << std::setprecision(8)
+//                  << fh->shell->trackingRef->camToWorld.matrix() << std::endl;
+//        std::cout << "fh->shell->trackingRef->camToWorld:" << std::endl << std::fixed << std::setprecision(8)
+//                  << fh->shell->camToTrackingRef.matrix() << std::endl;
+        std::cout << "fh->shell->camToWorld:" << std::endl << std::fixed << std::setprecision(8)
+                  << fh->shell->camToWorld.matrix() << std::endl;
 		fh->setEvalPT_scaled(fh->shell->camToWorld.inverse(),fh->shell->aff_g2l);
 	}
+
+//    {
+//      std::cout << "new_fh state(): " << fh->get_state() << std::endl;
+//      std::cout << "new_fh state_zero(): " << fh->get_state_zero() << std::endl;
+//	    std::cout << "new_fh.nullspaces_pose: " << std::endl << std::setprecision(8) << fh->nullspaces_pose << std::endl;
+//	    std::cout << "new_fh.nullspaces_scale: " << std::endl << std::setprecision(8) << fh->nullspaces_scale << std::endl;
+//	    std::cout << "new_fh.nullspaces_affine: " << std::endl << std::setprecision(8) << fh->nullspaces_affine << std::endl;
+//    }
+
 
 	traceNewCoarse(fh);
 
@@ -1247,6 +1312,14 @@ void FullSystem::makeKeyFrame( FrameHessian* fh)
 
 	setPrecalcValues();
 
+//	{
+//		for (int h = 0; h < ef->nFrames; h++)
+//			for (int t = 0; t < ef->nFrames; t++) {
+//				int idx = h + t * ef->nFrames;
+//				 std::cout << "ef->adHTdeltaF[" << idx << "]:" << std::fixed
+//						   << std::setprecision(8)<< ef->adHTdeltaF[idx] << std::endl;
+//			}
+//	}
 
 
 	// =========================== add new residuals for old points =========================
@@ -1266,7 +1339,9 @@ void FullSystem::makeKeyFrame( FrameHessian* fh)
 		}
 	}
 
-
+    {
+        ef->printConnectMap();
+    }
 
 
 	// =========================== Activate Points (& flag for marginalization). =========================
@@ -1279,10 +1354,9 @@ void FullSystem::makeKeyFrame( FrameHessian* fh)
 	// =========================== OPTIMIZE ALL =========================
 
 	fh->frameEnergyTH = frameHessians.back()->frameEnergyTH;
+    printf("fh->frameEnergyTH: %.8f\n", fh->frameEnergyTH);
 	float rmse = optimize(setting_maxOptIterations);
-
-
-
+//    return;
 
 
 	// =========================== Figure Out if INITIALIZATION FAILED =========================
@@ -1421,14 +1495,27 @@ void FullSystem::initializeFromInitializer(FrameHessian* newFrame)
         printf("Initialization: keep %.1f%% (need %d, have %d)!\n", 100*keepPercentage,
                 (int)(setting_desiredPointDensity), coarseInitializer->numPoints[0] );
 
+//	std::ofstream myfile_imm;
+//	myfile_imm.open("/Users/yinr/Desktop/initialize_cpp_immature_pts.txt");
+
+//    std::ofstream myfile_pnt;
+//    myfile_pnt.open("/Users/yinr/Desktop/cpp_init_select_pnt.txt");
+
+//	std::ofstream myfile;
+//	myfile.open("/Users/yinr/Desktop/cpp_init_pnt_iR.txt");
+
 	for(int i=0;i<coarseInitializer->numPoints[0];i++)
 	{
 		if(rand()/(float)RAND_MAX > keepPercentage) continue;
 
 		Pnt* point = coarseInitializer->points[0]+i;
+//        myfile << "pnt[" << i << "]: pnt.u:" << std::fixed << std::setprecision(3) << point->u << ", pnt.v:" << point->v << std::endl;
 		ImmaturePoint* pt = new ImmaturePoint(point->u+0.5f,point->v+0.5f,firstFrame,point->my_type, &Hcalib);
 
 		if(!std::isfinite(pt->energyTH)) { delete pt; continue; }
+
+//		myfile_pnt << "[" << i << "] point.u:" << std::fixed << std::setprecision(2) << point->u << ", point.v:" << point->v
+//			   << std::fixed << std::setprecision(8) << ", point.iR:" << point->iR << std::endl;
 
 
 		pt->idepth_max=pt->idepth_min=1;
@@ -1441,14 +1528,24 @@ void FullSystem::initializeFromInitializer(FrameHessian* newFrame)
 		ph->hasDepthPrior=true;
 		ph->setPointStatus(PointHessian::ACTIVE);
 
+//		myfile_imm << "[" << i << "] " << std::fixed << std::setprecision(2) << "u:" << ph->u << ", v:" << ph->v
+//			   << std::fixed << std::setprecision(6) << ", idepth:" << ph->idepth << ", idepth_scaled:" << ph->idepth_scaled
+//			   << ", idepth_zero_scaled:" << ph->idepth_zero_scaled << ", nullspaces_scale:" << ph->nullspaces_scale
+//               << std::endl;
+
 		firstFrame->pointHessians.push_back(ph);
 		ef->insertPoint(ph);
 	}
-
+//	myfile_imm.close();
+//  myfile_pnt.close();
 
  	SE3 firstToNew = coarseInitializer->thisToNext;
 	//SE3 firstToNew = mpSfmInitializer->GetSecondFramePose();
 	firstToNew.translation() /= rescaleFactor;
+
+//	std::cout << "first_to_new.translation_div_scale:\nR:\n" << std::fixed << std::setprecision(8)
+//			  << firstToNew.rotationMatrix() << std::endl
+//			  << "t:\n" << firstToNew.translation().transpose() << std::endl;
 
 
 	// really no lock required, as we are initializing.
@@ -1468,6 +1565,13 @@ void FullSystem::initializeFromInitializer(FrameHessian* newFrame)
 		newFrame->shell->camToTrackingRef = firstToNew.inverse();
 
 	}
+
+//    std::cout << "first_fh state(): " << firstFrame->get_state() << std::endl;
+//    std::cout << "new_fh state(): " << newFrame->get_state() << std::endl;
+
+//	std::cout << "new_fh.nullspaces_pose: " << std::endl << std::setprecision(8) << newFrame->nullspaces_pose << std::endl;
+//	std::cout << "new_fh.nullspaces_scale: " << std::endl << std::setprecision(8) << newFrame->nullspaces_scale << std::endl;
+//	std::cout << "new_fh.nullspaces_affine: " << std::endl << std::setprecision(8) << newFrame->nullspaces_affine << std::endl;
 
 	initialized=true;
 	printf("INITIALIZE FROM INITIALIZER (%d pts)!\n", (int)firstFrame->pointHessians.size());
@@ -1653,7 +1757,7 @@ void FullSystem::printFrameLifetimes()
 	boost::unique_lock<boost::mutex> lock(trackMutex);
 
 	std::ofstream* lg = new std::ofstream();
-	lg->open("logs/lifetimeLog.txt", std::ios::trunc | std::ios::out);
+	lg->open("logs/lifetimeLog.tsxt", std::ios::trunc | std::ios::out);
 	lg->precision(15);
 
 	for(FrameShell* s : allFrameHistory)

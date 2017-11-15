@@ -22,7 +22,7 @@
 */
 
 
- 
+#include <iomanip>
 #include "FullSystem/HessianBlocks.h"
 #include "util/FrameShell.h"
 #include "FullSystem/ImmaturePoint.h"
@@ -139,8 +139,13 @@ void FrameHessian::makeImages(float* color, CalibHessian* HCalib)
 	// make d0
 	int w=wG[0];
 	int h=hG[0];
-	for(int i=0;i<w*h;i++)
+	for(int i=0;i<w*h;i++) {
 		dI[i][0] = color[i];
+//		if (i / w == 38) {
+//			std::cout << "dIp[" << i / w << "," << i % w << "][0]:"
+//					  << std::fixed << std::setprecision(4) << dI[i][0] << std::endl;
+//		}
+	}
 
 	for(int lvl=0; lvl<pyrLevelsUsed; lvl++)
 	{
@@ -153,7 +158,6 @@ void FrameHessian::makeImages(float* color, CalibHessian* HCalib)
 			int lvlm1 = lvl-1;
 			int wlm1 = wG[lvlm1];
 			Eigen::Vector3f* dI_lm = dIp[lvlm1];
-
 
 
 			for(int y=0;y<hl;y++)
@@ -178,6 +182,10 @@ void FrameHessian::makeImages(float* color, CalibHessian* HCalib)
 			dI_l[idx][1] = dx;
 			dI_l[idx][2] = dy;
 
+//			if (lvl == 0 && idx % wl == 38) {
+//				std::cout << "dIp[" << idx / wl << "," << idx % wl << "][0]:"
+//						  << std::fixed << std::setprecision(4) << dI_l[idx][0] << std::endl;
+//			}
 
 			dabs_l[idx] = dx*dx+dy*dy;
 

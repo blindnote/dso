@@ -88,7 +88,7 @@ CoarseTracker::CoarseTracker(int ww, int hh) : lastRef_aff_g2l(0,0)
 
 	newFrame = 0;
 	lastRef = 0;
-	debugPlot = debugPrint = true;
+	debugPlot = debugPrint = false;
 	w[0]=h[0]=0;
 	refFrameID=-1;
 }
@@ -158,13 +158,13 @@ void CoarseTracker::makeCoarseDepthL0(std::vector<FrameHessian*> frameHessians)
 	}
 
 
-	for(int lvl=1; lvl<pyrLevelsUsed; lvl++)
-	{
-		int lvlm1 = lvl-1;
-		int wl = w[lvl], hl = h[lvl], wlm1 = w[lvlm1];
+		for(int lvl=1; lvl<pyrLevelsUsed; lvl++)
+		{
+			int lvlm1 = lvl-1;
+			int wl = w[lvl], hl = h[lvl], wlm1 = w[lvlm1];
 
-		float* idepth_l = idepth[lvl];
-		float* weightSums_l = weightSums[lvl];
+			float* idepth_l = idepth[lvl];
+			float* weightSums_l = weightSums[lvl];
 
 		float* idepth_lm = idepth[lvlm1];
 		float* weightSums_lm = weightSums[lvlm1];
@@ -502,6 +502,9 @@ Vec6 CoarseTracker::calcRes(int lvl, const SE3 &refToNew, AffLight aff_g2l, floa
 		delete resImage;
 	}
 
+//    printf("sum_squared_shift_T:%.8f, sum_squared_shift_RT:%.8f, sum_squared_shift_Num:%.8f\n",
+//           sumSquaredShiftT, sumSquaredShiftRT, sumSquaredShiftNum);
+
 	Vec6 rs;
 	rs[0] = E;
 	rs[1] = numTermsInE;
@@ -543,7 +546,7 @@ bool CoarseTracker::trackNewestCoarse(
 	debugPlot = setting_render_displayCoarseTrackingFull;
 	debugPrint = false;
 
-	std::cout << "........... coarsestLvl:" << coarsestLvl << std::endl;
+//	std::cout << "........... coarsestLvl:" << coarsestLvl << std::endl;
 	assert(coarsestLvl < 5 && coarsestLvl < pyrLevelsUsed);
 
 	lastResiduals.setConstant(NAN);
@@ -575,6 +578,8 @@ bool CoarseTracker::trackNewestCoarse(
 		}
 
 		calcGSSSE(lvl, H, b, refToNew_current, aff_g2l_current);
+//		std::cout << "lvl_" << lvl << " H:" << std::endl << std::fixed << std::setprecision(8) << H << std::endl;
+//		std::cout << "lvl_" << lvl << " b:" << std::fixed << std::setprecision(8) << b.transpose() << std::endl;
 
 		float lambda = 0.01;
 
@@ -681,6 +686,8 @@ bool CoarseTracker::trackNewestCoarse(
 			}
 		}
 
+		std::cout << "lvl_" << lvl << " resOld:" << std::fixed << std::setprecision(8) << resOld.transpose() << std::endl;
+
 		// set last residual for that level, as well as flow indicators.
 		lastResiduals[lvl] = sqrtf((float)(resOld[0] / resOld[1]));
 		lastFlowIndicators = resOld.segment<3>(2);
@@ -698,6 +705,7 @@ bool CoarseTracker::trackNewestCoarse(
 	// set!
 	lastToNew_out = refToNew_current;
 	aff_g2l_out = aff_g2l_current;
+//	std::cout << "lastToNew_out: " << std::endl << std::fixed << std::setprecision(8) << lastToNew_out.matrix() << std::endl;
 
 
 	if((setting_affineOptModeA != 0 && (fabsf(aff_g2l_out.a) > 1.2))

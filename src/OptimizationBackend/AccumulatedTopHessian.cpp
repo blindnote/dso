@@ -50,6 +50,13 @@ void AccumulatedTopHessianSSE::addPoint(EFPoint* p, EnergyFunctional const * con
 	float Hdd_acc=0;
 	VecCf  Hcd_acc = VecCf::Zero();
 
+
+//    std::cout << std::fixed << std::setprecision(8) << "dc: " << dc.transpose() << std::endl;
+//    printf("dd:%.8f\n", dd);
+
+
+//    printf("p[%d] residuals_all.len():%d\n", p->idxInPoints, p->residualsAll.size());
+
 	for(EFResidual* r : p->residualsAll)
 	{
 		if(mode==0)
@@ -96,6 +103,8 @@ void AccumulatedTopHessianSSE::addPoint(EFPoint* p, EnergyFunctional const * con
 				rtz = _mm_add_ps(rtz,_mm_mul_ps(_mm_load_ps(((float*)(rJ->JabF+1))+i),delta_b));
 				_mm_store_ps(((float*)&resApprox)+i, rtz);
 			}
+
+//		    std::cout << "p[" << p->idxInPoints << "]" << std::fixed << std::setprecision(8) << "resApprox: " << resApprox.transpose() << std::endl;
 		}
 
 		// need to compute JI^T * r, and Jab^T * r. (both are 2-vectors).
@@ -128,6 +137,13 @@ void AccumulatedTopHessianSSE::addPoint(EFPoint* p, EnergyFunctional const * con
 				rJ->JabJIdx(1,0), rJ->JabJIdx(1,1),
 				JI_r[0], JI_r[1]);
 
+//		std::cout << "self.acc[" << tid << "][" << htIDX << "]: \n" << std::fixed << std::setprecision(8) << acc[tid][htIDX].H << std::endl;
+//		std::cout << "self.acc[" << tid << "][" << htIDX << "]: \n";
+//		for (auto i = 0; i < 60; i++) {
+//			std::cout << std::fixed << std::setprecision(8) << acc[tid][htIDX].Data[i] << "\t";
+//		}
+//		std::cout << std::endl;
+
 
 		Vec2f Ji2_Jpdd = rJ->JIdx2 * rJ->Jpdd;
 		bd_acc +=  JI_r[0]*rJ->Jpdd[0] + JI_r[1]*rJ->Jpdd[1];
@@ -155,6 +171,10 @@ void AccumulatedTopHessianSSE::addPoint(EFPoint* p, EnergyFunctional const * con
 		p->Hdd_accAF = 0;
 		p->bd_accAF = 0;
 	}
+
+//	printf("p.Hdd_accAF: %.8f\n", p->Hdd_accAF);
+//	printf("p.bd_accAF: %.8f\n", p->bd_accAF);
+//	std::cout << std::fixed << std::setprecision(8) << "p.Hcd_accAF: " << p->Hcd_accAF.transpose() << std::endl;
 
 }
 template void AccumulatedTopHessianSSE::addPoint<0>(EFPoint* p, EnergyFunctional const * const ef, int tid);
@@ -264,8 +284,12 @@ void AccumulatedTopHessianSSE::stitchDoubleInternal(
 		{
 			acc[tid2][aidx].finish();
 			if(acc[tid2][aidx].num==0) continue;
+//			std::cout << "acc[" << tid2 << "][" << aidx << "]" << std::endl;
+//			std::cout << std::fixed << std::setprecision(8) << acc[tid2][aidx].H << std::endl;
 			accH += acc[tid2][aidx].H.cast<double>();
 		}
+
+//		std::cout << "accH:" << std::fixed << std::setprecision(8) << accH << std::endl;
 
 		H[tid].block<8,8>(hIdx, hIdx).noalias() += EF->adHost[aidx] * accH.block<8,8>(CPARS,CPARS) * EF->adHost[aidx].transpose();
 

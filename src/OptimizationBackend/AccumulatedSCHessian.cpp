@@ -68,6 +68,9 @@ void AccumulatedSCHessianSSE::addPoint(EFPoint* p, bool shiftPriorToZero, int ti
 		{
 			if(!r2->isActive()) continue;
 
+//			std::cout << "[" << r1ht << "][" << r2->targetIDX << "] L:"
+//					  << std::fixed << std::setprecision(8) <<  r1->JpJdF.transpose()
+//					  << ", R:" << r2->JpJdF.transpose() << std::endl;
 			accD[tid][r1ht+r2->targetIDX*nFrames2].update(r1->JpJdF, r2->JpJdF, p->HdiF);
 		}
 
@@ -107,12 +110,13 @@ void AccumulatedSCHessianSSE::stitchDoubleInternal(
 			bp += accEB[tid2][ijIdx].A1m.cast<double>();
 		}
 
+//        std::cout << "[" << k << "] Hpc:" << std::endl << std::fixed << std::setprecision(8) << Hpc << std::endl;
+//        std::cout << "[" << k << "] bp:" << std::endl << std::fixed << std::setprecision(8) << bp << std::endl;
+
 		H[tid].block<8,CPARS>(iIdx,0) += EF->adHost[ijIdx] * Hpc;
 		H[tid].block<8,CPARS>(jIdx,0) += EF->adTarget[ijIdx] * Hpc;
 		b[tid].segment<8>(iIdx) += EF->adHost[ijIdx] * bp;
 		b[tid].segment<8>(jIdx) += EF->adTarget[ijIdx] * bp;
-
-
 
 		for(int k=0;k<nf;k++)
 		{
@@ -129,12 +133,20 @@ void AccumulatedSCHessianSSE::stitchDoubleInternal(
 				accDM += accD[tid2][ijkIdx].A1m.cast<double>();
 			}
 
+//            std::cout << "k:[" << k << "], accDM:" << std::fixed << std::setprecision(8)
+//                      << std::endl << accDM << std::endl;
+
 			H[tid].block<8,8>(iIdx, iIdx) += EF->adHost[ijIdx] * accDM * EF->adHost[ikIdx].transpose();
 			H[tid].block<8,8>(jIdx, kIdx) += EF->adTarget[ijIdx] * accDM * EF->adTarget[ikIdx].transpose();
 			H[tid].block<8,8>(jIdx, iIdx) += EF->adTarget[ijIdx] * accDM * EF->adHost[ikIdx].transpose();
 			H[tid].block<8,8>(iIdx, kIdx) += EF->adHost[ijIdx] * accDM * EF->adTarget[ikIdx].transpose();
 		}
 	}
+
+
+//	std::cout << "sc_hessian:" << std::fixed << std::setprecision(8) << "H_before:" << std::endl << H[tid] << std::endl;
+//	std::cout << "sc_hessian:" << std::fixed << std::setprecision(8) << "b_before:" << std::endl << b[tid] << std::endl;
+
 
 	if(min==0)
 	{
@@ -146,6 +158,11 @@ void AccumulatedSCHessianSSE::stitchDoubleInternal(
 			b[tid].head<CPARS>() += accbc[tid2].A1m.cast<double>();
 		}
 	}
+
+
+//	std::cout << "sc_hessian:" << std::fixed << std::setprecision(8) << "H_after:" << std::endl << H[tid] << std::endl;
+//	std::cout << "sc_hessian:" << std::fixed << std::setprecision(8) << "b_after:" << std::endl << b[tid] << std::endl;
+
 
 
 //	// ----- new: copy transposed parts for calibration only.

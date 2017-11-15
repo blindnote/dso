@@ -42,4 +42,5 @@ namespace dso
 	extern float hM3G;
 
 	void setGlobalCalib(int w, int h, const Eigen::Matrix3f &K );
+    void print_global_calib();
 }

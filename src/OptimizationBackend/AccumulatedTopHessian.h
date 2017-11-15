@@ -123,6 +123,9 @@ public:
 			stitchDoubleInternal(&H, &b, EF, usePrior,0,nframes[0]*nframes[0],0,-1);
 		}
 
+//        std::cout << "top_hessian:" << std::fixed << std::setprecision(8) << "H_before:" << std::endl << H << std::endl;
+//        std::cout << "top_hessian:" << std::fixed << std::setprecision(8) << "b_before:" << std::endl << b << std::endl;
+
 		// make diagonal by copying over parts.
 		for(int h=0;h<nframes[0];h++)
 		{
@@ -136,7 +139,11 @@ public:
 				H.block<8,8>(tIdx, hIdx).noalias() = H.block<8,8>(hIdx, tIdx).transpose();
 			}
 		}
-	}
+
+//        std::cout << "top_hessian:" << std::fixed << std::setprecision(8) << "H_after:" << std::endl << H << std::endl;
+//        std::cout << "top_hessian:" << std::fixed << std::setprecision(8) << "b_after:" << std::endl << b << std::endl;
+
+    }
 
 
 

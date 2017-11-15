@@ -75,12 +75,17 @@ PointFrameResidual::PointFrameResidual(PointHessian* point_, FrameHessian* host_
 
 
 
-double PointFrameResidual::linearize(CalibHessian* HCalib)
+double PointFrameResidual::linearize(CalibHessian* HCalib, bool toprint)
 {
 	state_NewEnergyWithOutlier=-1;
 
 	if(state_state == ResState::OOB)
 		{ state_NewState = ResState::OOB; return state_energy; }
+
+    if (toprint) {
+        printf("my_host.frame_id:%d, my_host.idx:%d", host->frameID, host->idx);
+        printf("my_target.frame_id:%d, my_target.idx:%d", target->frameID, target->idx);
+    }
 
 	FrameFramePrecalc* precalc = &(host->targetPrecalc[target->idx]);
 	float energyLeft=0;
@@ -90,11 +95,24 @@ double PointFrameResidual::linearize(CalibHessian* HCalib)
 	const Vec3f &PRE_KtTll = precalc->PRE_KtTll;
 	const Mat33f &PRE_RTll_0 = precalc->PRE_RTll_0;
 	const Vec3f &PRE_tTll_0 = precalc->PRE_tTll_0;
+	if (toprint) {
+		std::cout << "precalc->PRE_KtTll:" << std::endl << std::fixed << std::setprecision(8) << PRE_KtTll << std::endl;
+		std::cout << "precalc->PRE_RTll_0:" << std::endl << std::fixed << std::setprecision(8) << PRE_RTll_0 << std::endl;
+		std::cout << "precalc->PRE_tTll_0:" << std::endl << std::fixed << std::setprecision(8) << PRE_tTll_0 << std::endl;
+	}
 	const float * const color = point->color;
 	const float * const weights = point->weights;
+	if (toprint) {
+		printf("color:(%.4f, %.4f, %.4f, %.4f, %.4f, %.4f, %.4f, %.4f)\n",
+			   color[0], color[1], color[2], color[3], color[4], color[5], color[6], color[7]);
+		printf("weights:(%.6f, %.6f, %.6f, %.6f, %.6f, %.6f, %.6f, %.6f)\n",
+			   weights[0], weights[1], weights[2], weights[3], weights[4], weights[5], weights[6], weights[7]);
+	}
 
 	Vec2f affLL = precalc->PRE_aff_mode;
 	float b0 = precalc->PRE_b0_mode;
+	if (toprint)
+		printf("precalc->PRE_aff_mode:(%.8f, %.8f), precalc->PRE_b0_mode:%.8f\n", affLL[0], affLL[1], b0);
 
 
 	Vec6f d_xi_x, d_xi_y;
@@ -110,6 +128,11 @@ double PointFrameResidual::linearize(CalibHessian* HCalib)
 			{ state_NewState = ResState::OOB; return state_energy; }
 
 		centerProjectedTo = Vec3f(Ku, Kv, new_idepth);
+		if (toprint) {
+            printf("drescale:%.8f, u:%.2f, v:%.2f, point->idepth_scaled:%.8f, point->idepth_zero_scaled:%.8f, centerProjectedTo:(%.8f, %.8f, %.8f)\n",
+                   drescale, u, v, point->idepth_scaled, point->idepth_zero_scaled, Ku, Kv, new_idepth);
+            std::cout << "Klip:\n" << std::fixed << std::setprecision(8) << KliP << std::endl;
+        }
 
 
 		// diff d_idepth
@@ -156,6 +179,13 @@ double PointFrameResidual::linearize(CalibHessian* HCalib)
 		d_xi_y[5] = u*HCalib->fyl();
 	}
 
+    if (toprint) {
+        printf("d_d_x:%.8f, d_d_y:%.8f\n", d_d_x, d_d_y);
+        std::cout << "d_xi_x:\n" << std::fixed << std::setprecision(8) << d_xi_x.transpose() << std::endl;
+        std::cout << "d_xi_y:\n" << std::fixed << std::setprecision(8) << d_xi_y.transpose() << std::endl;
+        std::cout << "d_C_x:\n" << std::fixed << std::setprecision(8) << d_C_x.transpose() << std::endl;
+        std::cout << "d_C_y:\n" << std::fixed << std::setprecision(8) << d_C_y.transpose() << std::endl;
+    }
 
 	{
 		J->Jpdxi[0] = d_xi_x;
@@ -189,10 +219,29 @@ double PointFrameResidual::linearize(CalibHessian* HCalib)
 		projectedTo[idx][0] = Ku;
 		projectedTo[idx][1] = Kv;
 
+        {
+            if (toprint) {
+                int Ku_ix = (int)Ku;
+                int Kv_iy = (int)Kv;
+                std::cout << "pattern[" << idx << "] interp:[ix, iy] = " << std::fixed << std::setprecision(4)
+                          << (*(dIl + Ku_ix + Kv_iy* wG[0])).transpose()
+                          << ", [ix+1, iy] = " << (*(dIl + Ku_ix + 1 + Kv_iy * wG[0])).transpose()
+                          << ", [ix, iy+1] = " << (*(dIl + Ku_ix + (Kv_iy + 1) * wG[0])).transpose()
+                          << ", [ix+1, iy+1] = " << (*(dIl + Ku_ix + 1 + (Kv_iy + 1) * wG[0])).transpose()
+                          << std::endl;
+           }
+        }
+
+//        if (idx == 7 && toprint) {
+//            getInterpolatedElement33_print(dIl, Ku, Kv, wG[0]);
+//        }
 
         Vec3f hitColor = (getInterpolatedElement33(dIl, Ku, Kv, wG[0]));
         float residual = hitColor[0] - (float)(affLL[0] * color[idx] + affLL[1]);
-
+        if (toprint) {
+            printf("pattern[%d] Ku:%.4f, Kv:%.4f, hit_color:(%.4f, %.4f, %.4f), residual:%.8f\n",
+                    idx, Ku, Kv, hitColor[0], hitColor[1], hitColor[2], residual);
+        }
 
 
 		float drdA = (color[idx]-b0);
@@ -207,6 +256,11 @@ double PointFrameResidual::linearize(CalibHessian* HCalib)
 
 		float hw = fabsf(residual) < setting_huberTH ? 1 : setting_huberTH / fabsf(residual);
 		energyLeft += w*w*hw *residual*residual*(2-hw);
+
+        if (toprint) {
+            printf("pattern[%d] drdA:%.8f, w:%.8f, hw:%.8f, energy:%.8f, energyLeft:%.8f\n",
+                    idx, drdA, w, hw, w * w * hw * residual * residual * (2.0 - hw), energyLeft);
+        }
 
 		{
 			if(hw < 1) hw = sqrtf(hw);
@@ -230,6 +284,13 @@ double PointFrameResidual::linearize(CalibHessian* HCalib)
 			JabJIdx_01+= drdA*hw * hitColor[2];
 			JabJIdx_10+= hw * hitColor[1];
 			JabJIdx_11+= hw * hitColor[2];
+
+
+			if (toprint) {
+				printf("pattern[%d] w:%.8f, hw:%.8f, hitColor[1]:%.3f, hitColor[2]:%.8f, JabJIdx_00:%.8f\n",
+					   idx, w, hw, hitColor[1], hitColor[2], JabJIdx_00);
+			}
+
 
 			JabJab_00+= drdA*drdA*hw*hw;
 			JabJab_01+= drdA*hw*hw;
@@ -258,6 +319,10 @@ double PointFrameResidual::linearize(CalibHessian* HCalib)
 	J->Jab2(1,1) = JabJab_11;
 
 	state_NewEnergyWithOutlier = energyLeft;
+
+    if (toprint) {
+        J->printdata();
+    }
 
 	if(energyLeft > std::max<float>(host->frameEnergyTH, target->frameEnergyTH) || wJI2_sum < 2)
 	{

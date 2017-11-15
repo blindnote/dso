@@ -80,6 +80,9 @@ inline int gridMaxSelection(Eigen::Vector3f* grads, bool* map_out, int w, int h,
 					}
 				}
 
+//            printf("bestXX:%f, bestXXID:%d, bestYY:%f, bestYYID:%d, bestXY:%f, bestXYID:%d, bestYX:%f, bestYXID:%d\n",
+//                   bestXX, bestXXID, bestYY, bestYYID, bestXY, bestXYID, bestYX, bestYXID);
+
 			bool* map0 = map_out+x+y*w;
 
 			if(bestXXID>=0)
@@ -202,7 +205,7 @@ inline int makePixelStatus(Eigen::Vector3f* grads, bool* map, int w, int h, floa
 
 	int numGoodPoints;
 
-
+//    printf("sparsityFactor:%d\n", sparsityFactor);
 	if(sparsityFactor==1) numGoodPoints = gridMaxSelection<1>(grads, map, w, h, THFac);
 	else if(sparsityFactor==2) numGoodPoints = gridMaxSelection<2>(grads, map, w, h, THFac);
 	else if(sparsityFactor==3) numGoodPoints = gridMaxSelection<3>(grads, map, w, h, THFac);
@@ -215,7 +218,7 @@ inline int makePixelStatus(Eigen::Vector3f* grads, bool* map, int w, int h, floa
 	else if(sparsityFactor==10) numGoodPoints = gridMaxSelection<10>(grads, map, w, h, THFac);
 	else if(sparsityFactor==11) numGoodPoints = gridMaxSelection<11>(grads, map, w, h, THFac);
 	else numGoodPoints = gridMaxSelection(grads, map, w, h, sparsityFactor, THFac);
-
+//    printf("grid_max_selection:%d\n", numGoodPoints);
 
 	/*
 	 * #points is approximately proportional to sparsityFactor^2.
@@ -231,7 +234,8 @@ inline int makePixelStatus(Eigen::Vector3f* grads, bool* map, int w, int h, floa
 
 	float oldTHFac = THFac;
 	if(newSparsity==1 && sparsityFactor==1) THFac = 0.5;
-
+//    printf("new_sparsity:%d, tmp_sparsity_factor:%d, quotia:%f, 1.0/quotia:%f, new_THFac:%f, THFac:%f\n",
+//          newSparsity, sparsityFactor, quotia, 1.0/quotia, THFac, oldTHFac);
 
 	if((abs(newSparsity-sparsityFactor) < 1 && THFac==oldTHFac) ||
 			( quotia > 0.8 &&  1.0f / quotia > 0.8) ||

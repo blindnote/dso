@@ -43,6 +43,7 @@ ImmaturePoint:: ImmaturePoint(int u_, int v_, FrameHessian* host_, float type, C
 		if (u+dx >= wG[0] || v+dy >= hG[0])
 			continue;
 
+
         Vec3f ptc = getInterpolatedElement33BiLin(host->dI, u+dx, v+dy,wG[0]);
 
 
@@ -314,7 +315,7 @@ ImmaturePointStatus ImmaturePoint::traceOn(FrameHessian* frame,const Mat33f &hos
 					(float)(bestU+rotatetPattern[idx][0]),
 					(float)(bestV+rotatetPattern[idx][1]),wG[0]);
 
-			if(!std::isfinite((float)hitColor[0])) {energy+=1e5; continue;}
+			if(!std::isfinite((float)hitColor[0])) {printf("it_%dp[%d] hit_color[0].is_finite(): false\n", it, idx); energy+=1e5; continue;}
 			float residual = hitColor[0] - (hostToFrame_affine[0] * color[idx] + hostToFrame_affine[1]);
 			float dResdDist = dx*hitColor[1] + dy*hitColor[2];
 			float hw = fabs(residual) < setting_huberTH ? 1 : setting_huberTH / fabs(residual);
@@ -365,7 +366,7 @@ ImmaturePointStatus ImmaturePoint::traceOn(FrameHessian* frame,const Mat33f &hos
 		if(fabsf(stepBack) < setting_trace_GNThreshold) break;
 	}
 
-
+//	printf("bestEnergy:%.8f, self.energyTH:%.8f\n", bestEnergy, energyTH);
 	// ============== detect energy-based outlier. ===================
 //	float absGrad0 = getInterpolatedElement(frame->absSquaredGrad[0],bestU, bestV, wG[0]);
 //	float absGrad1 = getInterpolatedElement(frame->absSquaredGrad[1],bestU*0.5-0.25, bestV*0.5-0.25, wG[1]);
@@ -382,8 +383,10 @@ ImmaturePointStatus ImmaturePoint::traceOn(FrameHessian* frame,const Mat33f &hos
 		lastTraceUV = Vec2f(-1,-1);
 		if(lastTraceStatus == ImmaturePointStatus::IPS_OUTLIER)
 			return lastTraceStatus = ImmaturePointStatus::IPS_OOB;
-		else
+		else {
+//			printf("huhaha\n");
 			return lastTraceStatus = ImmaturePointStatus::IPS_OUTLIER;
+		}
 	}
 
 
@@ -404,7 +407,7 @@ ImmaturePointStatus ImmaturePoint::traceOn(FrameHessian* frame,const Mat33f &hos
 	if(!std::isfinite(idepth_min) || !std::isfinite(idepth_max) || (idepth_max<0))
 	{
 		//printf("COUGHT INF / NAN minmax depth (%f %f)!\n", idepth_min, idepth_max);
-
+//		printf("infinite\n");
 		lastTracePixelInterval=0;
 		lastTraceUV = Vec2f(-1,-1);
 		return lastTraceStatus = ImmaturePointStatus::IPS_OUTLIER;

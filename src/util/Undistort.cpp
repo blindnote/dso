@@ -22,8 +22,10 @@
 */
 
 
-
-
+#include <iomanip>
+#include <fstream>
+#include <stdio.h>
+#include <sys/time.h>
 #include <sstream>
 #include <fstream>
 #include <iostream>
@@ -106,8 +108,20 @@ PhotometricUndistorter::PhotometricUndistorter(
 
 		float min=G[0];
         float max=G[GDepth-1];
+//		std::ofstream myfile;
+//		myfile.open ("/Users/yinr/Desktop/G_orig_dso_cpp.txt");
+//		for (int i=0;i<GDepth;i++) {
+//			myfile << i << "," << std::fixed << std::setprecision(14) << G[i] << std::endl;
+//		}
+//		myfile.close();
         for(int i=0;i<GDepth;i++) G[i] = 255.0 * (G[i] - min) / (max-min);			// make it to 0..255 => 0..255.
 	}
+//	std::ofstream myfile;
+//	myfile.open ("/Users/yinr/Desktop/G_final_dso_cpp.txt");
+//	for (int i=0;i<GDepth;i++) {
+//		myfile << i << "," << std::fixed << std::setprecision(14) << G[i] << std::endl;
+//	}
+//	myfile.close();
 
 	if(setting_photometricCalibration==0)
 	{
@@ -115,10 +129,11 @@ PhotometricUndistorter::PhotometricUndistorter(
 	}
 
 
-
 	printf("Reading Vignette Image from %s\n",vignetteImage.c_str());
 	MinimalImage<unsigned short>* vm16 = IOWrap::readImageBW_16U(vignetteImage.c_str());
 	MinimalImageB* vm8 = IOWrap::readImageBW_8U(vignetteImage.c_str());
+    //vm16->print_data();
+
 	vignetteMap = new float[w*h];
 	vignetteMapInv = new float[w*h];
 
@@ -136,9 +151,20 @@ PhotometricUndistorter::PhotometricUndistorter(
 		float maxV=0;
 		for(int i=0;i<w*h;i++)
 			if(vm16->at(i) > maxV) maxV = vm16->at(i);
+//		std::cout << ".......maxV:" << maxV << std::endl;
 
 		for(int i=0;i<w*h;i++)
 			vignetteMap[i] = vm16->at(i) / maxV;
+
+//		std::ofstream myfile;
+//		myfile.open ("/Users/yinr/Desktop/vm16_vignette_dso_cpp.txt");
+//		for (auto y = 0; y < h; y++) {
+//			for (auto x = 0; x < w; x++) {
+//				myfile << y << "," << x << "," << std::fixed << std::setprecision(4)
+//					   << vignetteMap[x + y*w] << std::endl;
+//			}
+//		}
+//		myfile.close();
 	}
 	else if(vm8 != 0)
 	{
@@ -170,9 +196,19 @@ PhotometricUndistorter::PhotometricUndistorter(
 	if(vm8!=0) delete vm8;
 
 
-	for(int i=0;i<w*h;i++)
-		vignetteMapInv[i] = 1.0f / vignetteMap[i];
+	for(int i=0;i<w*h;i++) {
+        vignetteMapInv[i] = 1.0f / vignetteMap[i];
+    }
 
+//	std::ofstream myfile;
+//	myfile.open ("/Users/yinr/Desktop/vignetteinv_img_dso_cpp.txt");
+//	for (auto y = 0; y < h; y++) {
+//		for (auto x = 0; x < w; x++) {
+//			myfile << y << "," << x << "," << std::fixed << std::setprecision(8)
+//				   << vignetteMapInv[x + y * w] << std::endl;
+//		}
+//	}
+//	myfile.close();
 
 	printf("Successfully read photometric calibration!\n");
 	valid = true;
@@ -235,11 +271,31 @@ void PhotometricUndistorter::processFrame(T* image_in, float exposure_time, floa
 			data[i] = G[image_in[i]];
 		}
 
+//		std::ofstream myfile;
+//		myfile.open ("/Users/yinr/Desktop/apply_G_dso_cpp.txt");
+//		for (auto y = 0; y < output->h; y++) {
+//			for (auto x = 0; x < output->w; x++) {
+//				myfile << y << "," << x << "," << std::fixed << std::setprecision(8)
+//					   << output->image[x + y * output->w] << std::endl;
+//			}
+//		}
+//		myfile.close();
+
 		if(setting_photometricCalibration==2)
 		{
 			for(int i=0; i<wh;i++)
 				data[i] *= vignetteMapInv[i];
 		}
+
+//		std::ofstream myfile;
+//		myfile.open ("/Users/yinr/Desktop/apply_vignetteinv_dso_cpp.txt");
+//		for (auto y = 0; y < output->h; y++) {
+//			for (auto x = 0; x < output->w; x++) {
+//				myfile << y << "," << x << "," << std::fixed << std::setprecision(8)
+//					   << output->image[x + y * output->w] << std::endl;
+//			}
+//		}
+//		myfile.close();
 
 		output->exposure_time = exposure_time;
 		output->timestamp = 0;
@@ -295,6 +351,16 @@ Undistort* Undistort::getUndistorterForFile(std::string configFilename, std::str
         u = new UndistortRadTan(configFilename.c_str(), true);
 		if(!u->isValid()) {delete u; return 0; }
     }
+
+	// -------
+//	if(std::sscanf(l1.c_str(), "%f %f %f %f %f %f %f %f %f",
+//				   &ic[0], &ic[1], &ic[2], &ic[3],
+//				   &ic[4], &ic[5], &ic[6], &ic[7], &ic[8]) == 9)
+//	{
+//		printf("found RadTan (OpenCV) camera model, building rectifier.\n");
+//		u = new UndistortRadTan(configFilename.c_str(), true);
+//		if(!u->isValid()) {delete u; return 0; }
+//	}
 
     // for backwards-compatibility: Use Pinhole / FoV model for 5 parameter.
     else if(std::sscanf(l1.c_str(), "%f %f %f %f %f",
@@ -388,16 +454,33 @@ ImageAndExposure* Undistort::undistort(const MinimalImage<T>* image_raw, float e
 {
 	if(image_raw->w != wOrg || image_raw->h != hOrg)
 	{
-		printf("Undistort::undistort: wrong image size (%d %d instead of %d %d) \n", image_raw->w, image_raw->h, w, h);
+		printf("Undistort::undistort: wrong image size (%d %d instead of %d %d) \n", image_raw->w, image_raw->h, wOrg, hOrg);
 		exit(1);
 	}
 
+	struct timeval process_tv_start;
+	gettimeofday(&process_tv_start, NULL);
 	photometricUndist->processFrame<T>(image_raw->data, exposure, factor);
+	struct timeval process_tv_end;
+	gettimeofday(&process_tv_end, NULL);
+//	printf("time processing frame:%.3fms\n", (process_tv_end.tv_usec-process_tv_start.tv_usec)/1000.0f);
 	ImageAndExposure* result = new ImageAndExposure(w, h, timestamp);
 	photometricUndist->output->copyMetaTo(*result);
 
+//	std::ofstream myfile;
+//    myfile.open ("/Users/yinr/Desktop/photometric_dso_cpp.txt");
+//        for (auto y = 0; y < photometricUndist->output->h; y++) {
+//            for (auto x = 0; x < photometricUndist->output->w; x++) {
+//                myfile << y << "," << x << "," << std::fixed << std::setprecision(8)
+//                       << photometricUndist->output->image[x + y * photometricUndist->output->w] << std::endl;
+//            }
+//		}
+//    myfile.close();
+
 	if (!passthrough)
 	{
+		struct timeval loop_tv_start;
+		gettimeofday(&loop_tv_start, NULL);
 		float* out_data = result->image;
 		float* in_data = photometricUndist->output->image;
 
@@ -471,6 +554,9 @@ ImageAndExposure* Undistort::undistort(const MinimalImage<T>* image_raw, float e
 			delete[] noiseMapY;
 		}
 
+		struct timeval loop_tv_end;
+		gettimeofday(&loop_tv_end, NULL);
+//		printf("time looping:%.3fus\n", (loop_tv_end.tv_usec-loop_tv_start.tv_usec));
 	}
 	else
 	{
@@ -694,7 +780,7 @@ void Undistort::makeOptimalK_crop()
 		iteration++;
 
 
-		printf("iteration %05d: range: x: %.4f - %.4f; y: %.4f - %.4f!\n", iteration,  minX, maxX, minY, maxY);
+//		printf("iteration %05d: range: x: %.4f - %.4f; y: %.4f - %.4f!\n", iteration,  minX, maxX, minY, maxY);
 		if(iteration > 500)
 		{
 			printf("FAILED TO COMPUTE GOOD CAMERA MATRIX - SOMETHING IS SERIOUSLY WRONG. ABORTING \n");
@@ -708,7 +794,6 @@ void Undistort::makeOptimalK_crop()
 	//K(1,1) = ((float)h)/(maxY-minY);
 	K(0,2) = -minX*K(0,0);
 	K(1,2) = -minY*K(1,1);
-
 }
 
 void Undistort::makeOptimalK_full()
@@ -782,6 +867,28 @@ void Undistort::readFromFile(const char* configFileName, int nPars, std::string 
 			return;
 		}
 	}
+//	else if(nPars == 9)
+//	{
+//		char buf[1000];
+//		snprintf(buf, 1000, "%s%%lf %%lf %%lf %%lf %%lf %%lf %%lf %%lf %%lf %%lf", prefix.c_str());
+//
+//		if(std::sscanf(l1.c_str(), buf,
+//					   &parsOrg[0], &parsOrg[1], &parsOrg[2], &parsOrg[3], &parsOrg[4],
+//					   &parsOrg[5], &parsOrg[6], &parsOrg[7], &parsOrg[8]) == 9 &&
+//		   std::sscanf(l2.c_str(), "%d %d", &wOrg, &hOrg) == 2)
+//		{
+//			printf("Input resolution: %d %d\n",wOrg, hOrg);
+//			printf("In: %s%f %f %f %f %f %f %f %f %f\n",
+//				   prefix.c_str(),
+//				   parsOrg[0], parsOrg[1], parsOrg[2], parsOrg[3], parsOrg[4], parsOrg[5], parsOrg[6], parsOrg[7], parsOrg[8]);
+//		}
+//		else
+//		{
+//			printf("Failed to read camera calibration (invalid format?)\nCalibration file: %s\n", configFileName);
+//			infile.close();
+//			return;
+//		}
+//	}
 	else
 	{
 		printf("called with invalid number of parameters.... forgot to implement me?\n");
@@ -950,12 +1057,32 @@ void Undistort::readFromFile(const char* configFileName, int nPars, std::string 
 
 	valid = true;
 
-
+//	std::ofstream myfilex;
+//	myfilex.open ("/Users/yinr/Desktop/remapX_dso_cpp.txt");
+//	for (auto y = 0; y < h; y++) {
+//        if (y != 38) continue;
+//		for (auto x = 0; x < w; x++) {
+//			myfilex << y << "," << x << "," << std::fixed << std::setprecision(8) << remapX[x + y * w] << std::endl;
+//		}
+//	}
+//	myfilex.close();
+//
+//	std::ofstream myfiley;
+//	myfiley.open ("/Users/yinr/Desktop/remapY_dso_cpp.txt");
+//	for (auto y = 0; y < h; y++) {
+//        if (y != 38) continue;
+//		for (auto x = 0; x < w; x++) {
+//			myfiley << y << "," << x << "," << std::fixed << std::setprecision(8) << remapY[x + y * w] << std::endl;
+//		}
+//	}
+//	myfiley.close();
 
 
 	printf("\nRectified Kamera Matrix:\n");
+ //   printf("\n***** passthrough:%d\n", passthrough);
 	std::cout << K << "\n\n";
-
+	//auto tmp_K_inv = K.inverse();
+	//std::cout << "&&&&&&&&& " << std::endl << tmp_K_inv << std::endl;
 }
 
 
@@ -1021,6 +1148,7 @@ UndistortRadTan::UndistortRadTan(const char* configFileName, bool noprefix)
 
     if(noprefix)
         readFromFile(configFileName, 8);
+//		readFromFile(configFileName, 9);
     else
         readFromFile(configFileName, 8,"RadTan ");
 }
@@ -1039,6 +1167,9 @@ void UndistortRadTan::distortCoordinates(float* in_x, float* in_y, float* out_x,
     float k2 = parsOrg[5];
     float r1 = parsOrg[6];
     float r2 = parsOrg[7];
+
+//	float k6 = parsOrg[8];
+
 
     float ofx = K(0,0);
     float ofy = K(1,1);
@@ -1062,7 +1193,11 @@ void UndistortRadTan::distortCoordinates(float* in_x, float* in_y, float* out_x,
         float rad_dist_u = k1 * rho2_u + k2 * rho2_u * rho2_u;
         float x_dist = ix + ix * rad_dist_u + 2.0 * r1 * mxy_u + r2 * (rho2_u + 2.0 * mx2_u);
         float y_dist = iy + iy * rad_dist_u + 2.0 * r2 * mxy_u + r1 * (rho2_u + 2.0 * my2_u);
-        float ox = fx*x_dist+cx;
+
+//        float x_dist = ix * (1 + rad_dist_u  + k6 * rho2_u * rho2_u * rho2_u) + 2.0 * r1 * mxy_u + r2 * (rho2_u + 2.0 * mx2_u);
+//        float y_dist = iy * (1 + rad_dist_u  + k6 * rho2_u * rho2_u * rho2_u) + 2.0 * r2 * mxy_u + r1 * (rho2_u + 2.0 * my2_u);
+
+		float ox = fx*x_dist+cx;
         float oy = fy*y_dist+cy;
 
 

@@ -915,7 +915,6 @@ inline void finish()
   }
 
 
-
 private:
   EIGEN_ALIGN16 float Data[60];
   EIGEN_ALIGN16 float Data1k[60];
