@@ -60,15 +60,16 @@ bool RecvImageAndShow(Camera& cam, const View &view, const Gravity& gravity, con
     DrawInfo(image, ss.str(), gravity);
     cv::imshow((winname+"_input").c_str(), image);
 
-    cv::Mat image_undistorted_opencv;
-    cv::undistort(image, image_undistorted_opencv, CameraIntrinsics, DistCoeffs);
-    cv::imshow((winname+"_opencv").c_str(), image_undistorted_opencv);
+//    cv::Mat image_undistorted_opencv;
+//    cv::undistort(image, image_undistorted_opencv, CameraIntrinsics, DistCoeffs);
+//    cv::imshow((winname+"_opencv").c_str(), image_undistorted_opencv);
 
 
     if (undistorter)
     {
         MinimalImageB minImgB(image.cols, image.rows, (unsigned char*)image.data);
-        ImageAndExposure* undistImg = undistorter->undistort<unsigned char>(&minImgB, 1.0);
+//        ImageAndExposure* undistImg = undistorter->undistort<unsigned char>(&minImgB, 1.0);
+        ImageAndExposure* undistImg = undistorter->undistort_opencv<unsigned char>(&minImgB, 1.0);
 
         MinimalImageF minImgF(undistImg->w, undistImg->h, undistImg->image);
         IOWrap::displayImage((winname+"_undistort").c_str(), &minImgF);
@@ -108,7 +109,7 @@ void parseArgument(char* arg)
 
 std::string mynt_calib="/Users/yinr/ComputerVision/SLAM/workspace/MYNT-EYE-SDK/1.x/1.6/mynteye-1.6-mac-x64-opencv-3.2.0/settings/SN00D1190E0009062D.conf";
 
-void LoadIntrinsics()
+void LoadIntrinsics(Undistort* undistorter_ptr)
 {
     cv::FileStorage fs;
     fs.open(mynt_calib, cv::FileStorage::READ);
@@ -119,15 +120,13 @@ void LoadIntrinsics()
         return;
     }
 
-    fs["M1"] >> CameraIntrinsics;
-    fs["D1"] >> DistCoeffs;
+    fs["M1"] >> undistorter_ptr->K_OpenCV;
+    fs["D1"] >> undistorter_ptr->DistCoeffs_OpenCV;
 
 //    DistCoeffs.at<float>(7) = 0.0;
 
-    cout << "M1:" << endl << setprecision(8) << CameraIntrinsics << endl;
-    cout << "D1:" << endl << setprecision(8) << DistCoeffs << endl;
-
-
+    cout << "M1:" << endl << setprecision(8) << undistorter_ptr->K_OpenCV << endl;
+    cout << "D1:" << endl << setprecision(8) << undistorter_ptr->DistCoeffs_OpenCV << endl;
     return;
 }
 
@@ -185,11 +184,17 @@ int main( int argc, char** argv )
 
 //    LoadIntrinsics();
 
+    printf("PHOTOMETRIC MODE WITHOUT CALIBRATION!\n");
+    setting_photometricCalibration = 0;
+    setting_affineOptModeA = 0; //-1: fix. >=0: optimize (with prior, if > 0).
+    setting_affineOptModeB = 0; //-1: fix. >=0: optimize (with prior, if > 0).
+
     undistorter = Undistort::getUndistorterForFile(calib, "", "");
     setGlobalCalib(
             (int)undistorter->getSize()[0],
             (int)undistorter->getSize()[1],
             undistorter->getK().cast<float>());
+    LoadIntrinsics(undistorter);
 
 
 //    const char *name = (argc >=2 ) ? argv[1] : "0";
@@ -219,7 +224,7 @@ int main( int argc, char** argv )
     cout << "\033[1;32mPress ESC/Q on Windows to terminate\033[0m\n";
 
     cam.ActivateAsyncGrabFeature(true);
-    cam.SetAutoExposureEnabled(false);
+//    cam.SetAutoExposureEnabled(false);
 
     CalibrationParameters parameters = cam.GetCalibrationParameters();
     cout << "LEFT EYE:" << endl << setprecision(8) << parameters.M1 << endl << parameters.D1 << endl;
@@ -241,20 +246,22 @@ int main( int argc, char** argv )
 
         if (code != ErrorCode::SUCCESS) continue;
 
-//        if (RecvImageAndShow(cam, View::VIEW_LEFT_UNRECTIFIED, Gravity::TOP_LEFT, "left", count_left)) {
+        if (RecvImageAndShow(cam, View::VIEW_LEFT_UNRECTIFIED, Gravity::TOP_LEFT, "left", count_left)) {
 //            count_left++;
-//        }
 
-        cv::Mat rect_image;
-        if (cam.RetrieveImage(rect_image, View::VIEW_LEFT) == ErrorCode::SUCCESS) {
-//            cv::imshow("left_rect", rect_image);
 
-//            int fps = Fps((cam.GetTimestamp() - time_ms) * 0.1);
-            int fps = Fps_FixedDuration();
-            printf("IMG FPS: left: %d\n", fps);
-
-//            time_ms = cam.GetTimestamp();
         }
+
+//        cv::Mat rect_image;
+//        if (cam.RetrieveImage(rect_image, View::VIEW_LEFT) == ErrorCode::SUCCESS) {
+////            cv::imshow("left_rect", rect_image);
+//
+////            int fps = Fps((cam.GetTimestamp() - time_ms) * 0.1);
+//            int fps = Fps_FixedDuration();
+//            printf("IMG FPS: left: %d\n", fps);
+//
+////            time_ms = cam.GetTimestamp();
+//        }
 
 
 //        if (RecvImageAndShow(cam, View::VIEW_RIGHT_UNRECTIFIED, Gravity::TOP_RIGHT, "right", count_right)) {
@@ -264,10 +271,8 @@ int main( int argc, char** argv )
 //        double elapsed = ((double)cv::getTickCount() - tick_beg) / cv::getTickFrequency();
 //        printf("IMG FPS: left: %.2f, right: %.2f\n", (count_left / elapsed), (count_right / elapsed));
 
-
 //        double elapsed = (cam.GetTimestamp() - time_ms) * 0.00001;
 //        printf("IMG FPS: left: %.2f, right: %.2f\n", (count_left / elapsed), (count_right / elapsed));
-
 
 //        cout << "Brightness: "  << cam.GetBrightness() << endl;
 //        cout << "Contrast: " << cam.GetContrast() << endl;

@@ -32,6 +32,10 @@
 
 #include <Eigen/Core>
 #include <iterator>
+
+#include <opencv2/highgui.hpp>
+#include <opencv2/imgproc.hpp>
+
 #include "util/settings.h"
 #include "util/globalFuncs.h"
 #include "IOWrapper/ImageDisplay.h"
@@ -254,13 +258,13 @@ void PhotometricUndistorter::processFrame(T* image_in, float exposure_time, floa
 	assert(output->w == w && output->h == h);
 	assert(data != 0);
 
-
 	if(!valid || exposure_time <= 0 || setting_photometricCalibration==0) // disable full photometric calibration.
 	{
-		for(int i=0; i<wh;i++)
+        for(int i=0; i<wh;i++)
 		{
 			data[i] = factor*image_in[i];
 		}
+
 		output->exposure_time = exposure_time;
 		output->timestamp = 0;
 	}
@@ -458,11 +462,11 @@ ImageAndExposure* Undistort::undistort(const MinimalImage<T>* image_raw, float e
 		exit(1);
 	}
 
-	struct timeval process_tv_start;
-	gettimeofday(&process_tv_start, NULL);
+//	struct timeval process_tv_start;
+//	gettimeofday(&process_tv_start, NULL);
 	photometricUndist->processFrame<T>(image_raw->data, exposure, factor);
-	struct timeval process_tv_end;
-	gettimeofday(&process_tv_end, NULL);
+//	struct timeval process_tv_end;
+//	gettimeofday(&process_tv_end, NULL);
 //	printf("time processing frame:%.3fms\n", (process_tv_end.tv_usec-process_tv_start.tv_usec)/1000.0f);
 	ImageAndExposure* result = new ImageAndExposure(w, h, timestamp);
 	photometricUndist->output->copyMetaTo(*result);
@@ -479,8 +483,8 @@ ImageAndExposure* Undistort::undistort(const MinimalImage<T>* image_raw, float e
 
 	if (!passthrough)
 	{
-		struct timeval loop_tv_start;
-		gettimeofday(&loop_tv_start, NULL);
+//		struct timeval loop_tv_start;
+//		gettimeofday(&loop_tv_start, NULL);
 		float* out_data = result->image;
 		float* in_data = photometricUndist->output->image;
 
@@ -554,8 +558,8 @@ ImageAndExposure* Undistort::undistort(const MinimalImage<T>* image_raw, float e
 			delete[] noiseMapY;
 		}
 
-		struct timeval loop_tv_end;
-		gettimeofday(&loop_tv_end, NULL);
+//		struct timeval loop_tv_end;
+//		gettimeofday(&loop_tv_end, NULL);
 //		printf("time looping:%.3fus\n", (loop_tv_end.tv_usec-loop_tv_start.tv_usec));
 	}
 	else
@@ -570,6 +574,55 @@ ImageAndExposure* Undistort::undistort(const MinimalImage<T>* image_raw, float e
 template ImageAndExposure* Undistort::undistort<unsigned char>(const MinimalImage<unsigned char>* image_raw, float exposure, double timestamp, float factor) const;
 template ImageAndExposure* Undistort::undistort<unsigned short>(const MinimalImage<unsigned short>* image_raw, float exposure, double timestamp, float factor) const;
 //template ImageAndExposure* Undistort::undistort<Vec3b>(const MinimalImage<Vec3b>* image_raw, float exposure, double timestamp, float factor) const;
+
+
+//////////////////////////////////
+template<typename T>
+ImageAndExposure* Undistort::undistort_opencv(const MinimalImage<T>* image_raw, float exposure, double timestamp, float factor) const
+{
+    if(image_raw->w != wOrg || image_raw->h != hOrg)
+    {
+        printf("Undistort::undistort: wrong image size (%d %d instead of %d %d) \n", image_raw->w, image_raw->h, wOrg, hOrg);
+        exit(1);
+    }
+
+    photometricUndist->processFrame<T>(image_raw->data, exposure, factor);
+
+    ImageAndExposure* result = new ImageAndExposure(w, h, timestamp);
+    photometricUndist->output->copyMetaTo(*result);
+
+    if (!passthrough)
+    {
+        float* out_data = result->image;
+        float* in_data = photometricUndist->output->image;
+
+
+        uchar* in_data_uchar = new uchar[h*w];
+        for(auto i=0; i<w*h; i++) { in_data_uchar[i] = (uchar)(in_data[i]); }
+        cv::Mat input_mat = cv::Mat(h, w, CV_8U, in_data_uchar);
+//        cv::imshow("after photo", input_mat);
+
+        cv::Mat image_undistorted_opencv;
+        cv::undistort(input_mat, image_undistorted_opencv, K_OpenCV, DistCoeffs_OpenCV);
+
+//		cv::imshow("inside_undistort_uchar", image_undistorted_opencv);
+
+//        memcpy(result->image, (float*)image_undistorted_opencv.data, sizeof(float)*w*h);
+        for(auto i=0; i<w*h; i++) { result->image[i] = (float)image_undistorted_opencv.data[i]; }
+    }
+    else
+    {
+        memcpy(result->image, photometricUndist->output->image, sizeof(float)*w*h);
+    }
+
+    applyBlurNoise(result->image);
+
+    return result;
+}
+template ImageAndExposure* Undistort::undistort_opencv<unsigned char>(const MinimalImage<unsigned char>* image_raw, float exposure, double timestamp, float factor) const;
+template ImageAndExposure* Undistort::undistort_opencv<unsigned short>(const MinimalImage<unsigned short>* image_raw, float exposure, double timestamp, float factor) const;
+//////////////////////////////////
+
 
 
 void Undistort::applyBlurNoise(float* img) const
@@ -1020,6 +1073,15 @@ void Undistort::readFromFile(const char* configFileName, int nPars, std::string 
         passthrough = false; // cannot pass through when fx / fy have been overwritten.
 	}
 
+    /////////////////////////////////////////////
+
+    K.setIdentity();
+    K(0,0) = parsOrg[0];
+    K(1,1) = parsOrg[1];
+    K(0,2) = parsOrg[2];
+    K(1,2) = parsOrg[3];
+
+    /////////////////////////////////////////////
 
 	for(int y=0;y<h;y++)
 		for(int x=0;x<w;x++)

@@ -32,7 +32,6 @@
 
 
 
-
 namespace dso
 {
 
@@ -83,6 +82,10 @@ public:
 	ImageAndExposure* undistort(const MinimalImage<T>* image_raw, float exposure=0, double timestamp=0, float factor=1) const;
 	static Undistort* getUndistorterForFile(std::string configFilename, std::string gammaFilename, std::string vignetteFilename);
 
+	template<typename T>
+	ImageAndExposure* undistort_opencv(const MinimalImage<T>* image_raw, float exposure=0, double timestamp=0, float factor=1) const;
+
+
 	void loadPhotometricCalibration(std::string file, std::string noiseImage, std::string vignetteImage);
 
 	PhotometricUndistorter* photometricUndist;
@@ -99,6 +102,13 @@ public:
 //
 //		return originalK;
 //	}
+
+
+	/////////////////////
+	cv::Mat K_OpenCV;
+	cv::Mat DistCoeffs_OpenCV;
+	////////////////////
+
 
 protected:
     int w, h, wOrg, hOrg, wUp, hUp;

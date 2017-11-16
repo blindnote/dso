@@ -181,6 +181,16 @@ void parseArgument(char* arg)
         return;
     }
 
+    if(1==sscanf(arg,"nogui=%d",&option))
+    {
+        if(option==1)
+        {
+            disableAllDisplay = true;
+            printf("NO GUI!\n");
+        }
+        return;
+    }
+
     if(1==sscanf(arg,"cam=%s",buf))
     {
         cam_name = buf;
@@ -208,6 +218,28 @@ FullSystem* fullSystem = 0;
 Undistort* undistorter = 0;
 uint64_t frameID = 0;
 
+std::string mynt_calib="/Users/yinr/ComputerVision/SLAM/workspace/MYNT-EYE-SDK/1.x/1.6/mynteye-1.6-mac-x64-opencv-3.2.0/settings/SN00D1190E0009062D.conf";
+
+void LoadIntrinsics(Undistort* undistorter_ptr)
+{
+    cv::FileStorage fs;
+    fs.open(mynt_calib, cv::FileStorage::READ);
+
+    if (!fs.isOpened())
+    {
+        std::cerr << "Fail to open " << mynt_calib << endl;
+        return;
+    }
+
+    fs["M1"] >> undistorter_ptr->K_OpenCV;
+    fs["D1"] >> undistorter_ptr->DistCoeffs_OpenCV;
+
+//    DistCoeffs.at<float>(7) = 0.0;
+
+    cout << "M1:" << endl << setprecision(8) << undistorter_ptr->K_OpenCV << endl;
+    cout << "D1:" << endl << setprecision(8) << undistorter_ptr->DistCoeffs_OpenCV << endl;
+    return;
+}
 
 
 int main( int argc, char** argv )
@@ -230,6 +262,8 @@ int main( int argc, char** argv )
             (int)undistorter->getSize()[0],
             (int)undistorter->getSize()[1],
             undistorter->getK().cast<float>());
+
+    LoadIntrinsics(undistorter);
 
 
     fullSystem = new FullSystem();
@@ -265,40 +299,29 @@ int main( int argc, char** argv )
         cout << "\033[1;32mPress ESC/Q on Windows to terminate\033[0m\n";
 
         cam->ActivateAsyncGrabFeature(true);
-        cam->SetAutoExposureEnabled(false);
+//        cam->SetAutoExposureEnabled(false);
 
 
         std::thread runthread([&]()
         {
-//            double t = 0.0, fps = 0.0;
-
             while (frameID < total_frames)
             {
-//              t = (double)cv::getTickCount();
-
               ErrorCode code = cam->Grab();
               if (code != ErrorCode::SUCCESS) continue;
 
               cv::Mat img;
-              if ((eye == "left" && cam->RetrieveImage(img, View::VIEW_LEFT) == ErrorCode::SUCCESS) ||
-                  (eye == "right" && cam->RetrieveImage(img, View::VIEW_RIGHT) == ErrorCode::SUCCESS))
+              if ((eye == "left" && cam->RetrieveImage(img, View::VIEW_LEFT_UNRECTIFIED) == ErrorCode::SUCCESS)
+//                  || (eye == "right" && cam->RetrieveImage(img, View::VIEW_RIGHT_UNRECTIFIED) == ErrorCode::SUCCESS)
+                 )
               {
-            //                std::stringstream ss;
-            //                Append(ss, img.cols, nullptr, true) << "x" << img.rows << ", " << frameID;
-            //                DrawInfo(img, ss.str(), eye == "left" ? Gravity::TOP_LEFT : Gravity::TOP_RIGHT);
-            //                cv::imshow(eye + "_raw", img);
-
-
-//                  t = (double)cv::getTickCount() - t;
-//                  fps = cv::getTickFrequency() / t;
-//                  printf(">>>>>>>>>>>> %.2f\n", fps);
 
                   frameID++;
                   if (frameID < 20) continue;
 
 
                   MinimalImageB minImgB(img.cols, img.rows, (unsigned char*)img.data);
-                  ImageAndExposure* undistImg = undistorter->undistort<unsigned char>(&minImgB, 1.0);
+//                  ImageAndExposure* undistImg = undistorter->undistort<unsigned char>(&minImgB, 1.0);
+                    ImageAndExposure* undistImg = undistorter->undistort_opencv<unsigned char>(&minImgB, 1.0);
 
                   fullSystem->addActiveFrame(undistImg, frameID);
                   delete undistImg;
