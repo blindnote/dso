@@ -192,6 +192,7 @@ if (OpenCV_FOUND AND Pangolin_FOUND)
 
 	add_executable(mynteye_test ${PROJECT_SOURCE_DIR}/src/main_mynteye_test.cpp)
 	add_executable(mynteye ${PROJECT_SOURCE_DIR}/src/main_mynteye.cpp)
+	add_executable(mynteye_async ${PROJECT_SOURCE_DIR}/src/main_mynteye_async.cpp)
 	add_executable(mynteye_dataset ${PROJECT_SOURCE_DIR}/src/main_mynteye_dataset.cpp)
 
     #target_link_libraries(dso_dataset dso boost_system boost_thread cxsparse ${LIBZIP_LIBRARY} ${OPENCV_LIBRARIES_MINE} ${Pangolin_LIBRARIES} ${OpenCV_LIBS})
@@ -202,6 +203,7 @@ if (OpenCV_FOUND AND Pangolin_FOUND)
 
 	target_link_libraries(mynteye_test ${MYNTEYE_LIBRARIES_1} ${OPENCV_LIBRARIES_MYNTEYE} dso ${BOOST_LIBRARIES_MINE} )
 	target_link_libraries(mynteye ${MYNTEYE_LIBRARIES_1} dso ${BOOST_LIBRARIES_MINE} ${SUITESPARSE_LIBRARIES_MINE} ${LIBZIP_LIBRARY} ${Pangolin_LIBRARIES} ${OPENCV_LIBRARIES_MYNTEYE})
+	target_link_libraries(mynteye_async ${MYNTEYE_LIBRARIES_1} dso ${BOOST_LIBRARIES_MINE} ${SUITESPARSE_LIBRARIES_MINE} ${LIBZIP_LIBRARY} ${Pangolin_LIBRARIES} ${OPENCV_LIBRARIES_MYNTEYE})
 	target_link_libraries(mynteye_dataset ${MYNTEYE_LIBRARIES_1} dso ${BOOST_LIBRARIES_MINE} ${SUITESPARSE_LIBRARIES_MINE} ${LIBZIP_LIBRARY} ${Pangolin_LIBRARIES} ${OPENCV_LIBRARIES_MYNTEYE})
 
 else()
