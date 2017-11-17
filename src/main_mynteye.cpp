@@ -304,6 +304,10 @@ int main( int argc, char** argv )
 
         std::thread runthread([&]()
         {
+
+            long long last_timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(
+                    std::chrono::system_clock::now().time_since_epoch()).count();
+
             while (frameID < total_frames)
             {
               ErrorCode code = cam->Grab();
@@ -316,12 +320,18 @@ int main( int argc, char** argv )
               {
 
                   frameID++;
+
+                  long long curr_timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(
+                          std::chrono::system_clock::now().time_since_epoch()).count();
+                  long long elapse = curr_timestamp - last_timestamp;
+                  last_timestamp = curr_timestamp;
+
                   if (frameID < 20) continue;
 
-
+//                    cout << "........... elapse:" << elapse << endl;
                   MinimalImageB minImgB(img.cols, img.rows, (unsigned char*)img.data);
 //                  ImageAndExposure* undistImg = undistorter->undistort<unsigned char>(&minImgB, 1.0);
-                    ImageAndExposure* undistImg = undistorter->undistort_opencv<unsigned char>(&minImgB, 1.0);
+                    ImageAndExposure* undistImg = undistorter->undistort_opencv<unsigned char>(&minImgB, elapse*0.001);
 
                   fullSystem->addActiveFrame(undistImg, frameID);
                   delete undistImg;

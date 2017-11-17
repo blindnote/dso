@@ -133,6 +133,13 @@ PhotometricUndistorter::PhotometricUndistorter(
 	}
 
 
+//	if (setting_photometricCalibration == 1)
+//	{
+//		printf("Only apply Gamma!\n");
+//		valid = true;
+//		return;
+//	}
+
 	printf("Reading Vignette Image from %s\n",vignetteImage.c_str());
 	MinimalImage<unsigned short>* vm16 = IOWrap::readImageBW_16U(vignetteImage.c_str());
 	MinimalImageB* vm8 = IOWrap::readImageBW_8U(vignetteImage.c_str());
