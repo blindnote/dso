@@ -119,6 +119,7 @@ public:
 	  std::less<uint64_t>,
 	  Eigen::aligned_allocator<std::pair<uint64_t, Eigen::Vector2i>>
 	  > connectivityMap;
+//	std::map<uint64_t,Eigen::Vector2i> connectivityMap;
 
 private:
 
