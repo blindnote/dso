@@ -27,6 +27,7 @@
 #include <vector>
 #include "util/NumType.h"
 #include "util/MinimalImage.h"
+#include "util/ImageAndExposure.h"
 
 
 namespace dso
@@ -41,6 +42,7 @@ void displayImage(const char* windowName, const MinimalImageF* img, bool autoSiz
 void displayImage(const char* windowName, const MinimalImageF3* img, bool autoSize = false);
 void displayImage(const char* windowName, const MinimalImageB16* img, bool autoSize = false);
 
+void displayImage(const char* windowName, const ImageAndExposure* img, bool autoSize = false);
 
 void displayImageStitch(const char* windowName, const std::vector<MinimalImageB*> images, int cc=0, int rc=0);
 void displayImageStitch(const char* windowName, const std::vector<MinimalImageB3*> images, int cc=0, int rc=0);

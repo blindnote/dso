@@ -23,7 +23,8 @@
 
 
 #pragma once
-
+#include <iomanip>
+#include <opencv2/core.hpp>
 #include "util/ImageAndExposure.h"
 #include "util/MinimalImage.h"
 #include "util/NumType.h"
@@ -81,11 +82,25 @@ public:
 
 	template<typename T>
 	ImageAndExposure* undistort(const MinimalImage<T>* image_raw, float exposure=0, double timestamp=0, float factor=1) const;
-	static Undistort* getUndistorterForFile(std::string configFilename, std::string gammaFilename, std::string vignetteFilename);
+	static Undistort* getUndistorterForFile(std::string configFilename, std::string gammaFilename, std::string vignetteFilename,
+											const std::string& opencv_calib="");
+
+
+	template<typename T>
+	ImageAndExposure* undistort_opencv(const MinimalImage<T>* image_raw, float exposure=0, double timestamp=0, float factor=1) const;
+
 
 	void loadPhotometricCalibration(std::string file, std::string noiseImage, std::string vignetteImage);
 
 	PhotometricUndistorter* photometricUndist;
+
+    //////////////////////////
+    cv::Mat K_OpenCV;
+    cv::Mat DistCoeffs_OpenCV;
+    bool opencv_enabled_;
+    cv::Mat map1_, map2_;
+    //////////////////////////
+
 
 protected:
     int w, h, wOrg, hOrg, wUp, hUp;
@@ -103,7 +118,32 @@ protected:
 	void makeOptimalK_crop();
 	void makeOptimalK_full();
 
-	void readFromFile(const char* configFileName, int nPars, std::string prefix = "");
+	void readFromFile(const char* configFileName, int nPars, const std::string& opencv_calib, std::string prefix = "");
+	void LoadIntrinsics( const std::string& opencv_calib = "" )
+	{
+		if (opencv_calib == "") return;
+
+		cv::FileStorage fs;
+		fs.open(opencv_calib, cv::FileStorage::READ);
+
+		if (!fs.isOpened())
+		{
+			std::cerr << "Fail to open " << opencv_calib << std::endl;
+			return;
+		}
+
+		fs["M1"] >> K_OpenCV;
+		fs["D1"] >> DistCoeffs_OpenCV;
+
+		opencv_enabled_ = true;
+
+//    DistCoeffs.at<float>(7) = 0.0;
+
+		std::cout << "M1:" << std::endl << std::setprecision(8) << K_OpenCV << std::endl;
+		std::cout << "D1:" << std::endl << std::setprecision(8) << DistCoeffs_OpenCV << std::endl;
+		return;
+	}
+
 };
 
 class UndistortFOV : public Undistort
@@ -111,7 +151,7 @@ class UndistortFOV : public Undistort
 public:
 	EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
 
-    UndistortFOV(const char* configFileName, bool noprefix);
+    UndistortFOV(const char* configFileName, bool noprefix, const std::string& opencv_calib="");
 	~UndistortFOV();
 	void distortCoordinates(float* in_x, float* in_y, float* out_x, float* out_y, int n) const;
 
@@ -121,7 +161,7 @@ class UndistortRadTan : public Undistort
 {
 public:
 	EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
-    UndistortRadTan(const char* configFileName, bool noprefix);
+    UndistortRadTan(const char* configFileName, bool noprefix, const std::string& opencv_calib="");
     ~UndistortRadTan();
     void distortCoordinates(float* in_x, float* in_y, float* out_x, float* out_y, int n) const;
 
@@ -131,7 +171,7 @@ class UndistortEquidistant : public Undistort
 {
 public:
 	EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
-    UndistortEquidistant(const char* configFileName, bool noprefix);
+    UndistortEquidistant(const char* configFileName, bool noprefix, const std::string& opencv_calib="");
     ~UndistortEquidistant();
     void distortCoordinates(float* in_x, float* in_y, float* out_x, float* out_y, int n) const;
 
@@ -141,7 +181,7 @@ class UndistortPinhole : public Undistort
 {
 public:
 	EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
-    UndistortPinhole(const char* configFileName, bool noprefix);
+    UndistortPinhole(const char* configFileName, bool noprefix, const std::string& opencv_calib="");
 	~UndistortPinhole();
 	void distortCoordinates(float* in_x, float* in_y, float* out_x, float* out_y, int n) const;
 
@@ -153,7 +193,7 @@ class UndistortKB : public Undistort
 {
 public:
 	EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
-    UndistortKB(const char* configFileName, bool noprefix);
+    UndistortKB(const char* configFileName, bool noprefix, const std::string& opencv_calib="");
 	~UndistortKB();
 	void distortCoordinates(float* in_x, float* in_y, float* out_x, float* out_y, int n) const;
 

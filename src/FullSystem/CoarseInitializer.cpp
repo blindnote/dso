@@ -96,7 +96,9 @@ bool CoarseInitializer::trackFrame(FrameHessian* newFrameHessian, std::vector<IO
 
 	if(!snapped)
 	{
-		thisToNext.translation().setZero();
+//		thisToNext.translation().setZero();
+//		thisToNext.setRotationMatrix(Sophus::Matrix<double, 3, 3>());
+		thisToNext = SE3();
 		for(int lvl=0;lvl<pyrLevelsUsed;lvl++)
 		{
 			int npts = numPoints[lvl];
@@ -507,12 +509,12 @@ Vec3f CoarseInitializer::calcResAndGS(
 		Pnt* point = ptsl+i;
 		if(!point->isGood_new)
 		{
-			E.updateSingle((float)(point->energy[1]));
+			EAlpha.updateSingle((float)(point->energy[1]));
 		}
 		else
 		{
 			point->energy_new[1] = (point->idepth_new-1)*(point->idepth_new-1);
-			E.updateSingle((float)(point->energy_new[1]));
+			EAlpha.updateSingle((float)(point->energy_new[1]));
 		}
 	}
 	EAlpha.finish();

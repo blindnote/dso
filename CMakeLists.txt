@@ -53,6 +53,9 @@ set(dso_SOURCE_FILES
   ${PROJECT_SOURCE_DIR}/src/util/settings.cpp
   ${PROJECT_SOURCE_DIR}/src/util/Undistort.cpp
   ${PROJECT_SOURCE_DIR}/src/util/globalCalib.cpp
+
+  ${PROJECT_SOURCE_DIR}/src/calibration/geometric_calibration.cpp
+  ${PROJECT_SOURCE_DIR}/src/calibration/photometric_calibration.cpp
 )
 
 
@@ -81,9 +84,12 @@ else ()
 endif ()
 
 # decide if we have openCV
+set(OpenCV_FOUND TRUE)
+file(GLOB OPENCV_LIBRARIES_MINE "/usr/local/Cellar/opencv3/3.3.1_1/lib/*dylib")
 if (OpenCV_FOUND)
 	message("--- found OpenCV, compiling dso_opencv library.")
-	include_directories( ${OpenCV_INCLUDE_DIRS} )
+	# include_directories( ${OpenCV_INCLUDE_DIRS} )
+	include_directories( /usr/local/Cellar/opencv3/3.3.1_1/include )
 	set(dso_opencv_SOURCE_FILES 
 	  ${PROJECT_SOURCE_DIR}/src/IOWrapper/OpenCV/ImageDisplay_OpenCV.cpp
 	  ${PROJECT_SOURCE_DIR}/src/IOWrapper/OpenCV/ImageRW_OpenCV.cpp)
@@ -121,11 +127,43 @@ else()
     set(BOOST_THREAD_LIBRARY boost_thread)
 endif()
 
+
+# boost
+include_directories( /usr/local/Cellar/boost/1.65.1/include )
+file(GLOB BOOST_LIBRARIES_MINE "/usr/local/Cellar/boost/1.65.1/lib/*" )
+
+# suite sparse
+include_directories( /usr/local/Cellar/suite-sparse/4.5.4/include/ )
+file(GLOB SUITESPARSE_LIBRARIES_MINE "/usr/local/Cellar/suite-sparse/4.5.4/lib/*" )
+
+# mynteye
+include_directories( /Users/yinr/ComputerVision/SLAM/workspace/MYNT-EYE-SDK/1.x/1.6/mynteye-1.6-mac-x64-opencv-3.2.0/include )
+file(GLOB MYNTEYE_LIBRARIES_1
+		"/Users/yinr/ComputerVision/SLAM/workspace/MYNT-EYE-SDK/1.x/1.6/mynteye-1.6-mac-x64-opencv-3.2.0/lib/libmynteye_core.dylib")
+file(GLOB OPENCV_LIBRARIES_MYNTEYE "/Users/yinr/ComputerVision/SLAM/workspace/opencv/build/lib/*dylib")
+
+
+
 # build main executable (only if we have both OpenCV and Pangolin)
 if (OpenCV_FOUND AND Pangolin_FOUND)
 	message("--- compiling dso_dataset.")
 	add_executable(dso_dataset ${PROJECT_SOURCE_DIR}/src/main_dso_pangolin.cpp )
-    target_link_libraries(dso_dataset dso boost_system cxsparse ${BOOST_THREAD_LIBRARY} ${LIBZIP_LIBRARY} ${Pangolin_LIBRARIES} ${OpenCV_LIBS})
+    target_link_libraries(dso_dataset dso ${BOOST_LIBRARIES_MINE} ${SUITESPARSE_LIBRARIES_MINE} ${LIBZIP_LIBRARY} ${Pangolin_LIBRARIES} ${OPENCV_LIBRARIES_MINE})
+
+	add_executable(mynteye_async ${PROJECT_SOURCE_DIR}/src/main_mynteye_async.cpp)
+	target_link_libraries(mynteye_async dso ${BOOST_LIBRARIES_MINE} ${SUITESPARSE_LIBRARIES_MINE} ${LIBZIP_LIBRARY} ${Pangolin_LIBRARIES} ${OPENCV_LIBRARIES_MYNTEYE} ${MYNTEYE_LIBRARIES_1})
+
+	add_executable(mynteye ${PROJECT_SOURCE_DIR}/src/main_mynteye.cpp)
+	target_link_libraries(mynteye dso ${BOOST_LIBRARIES_MINE} ${SUITESPARSE_LIBRARIES_MINE} ${LIBZIP_LIBRARY} ${Pangolin_LIBRARIES} ${OPENCV_LIBRARIES_MYNTEYE} ${MYNTEYE_LIBRARIES_1})
+
+	add_executable(mynteye_dataset ${PROJECT_SOURCE_DIR}/src/main_mynteye_dataset.cpp)
+	target_link_libraries(mynteye_dataset dso ${BOOST_LIBRARIES_MINE} ${SUITESPARSE_LIBRARIES_MINE} ${LIBZIP_LIBRARY} ${Pangolin_LIBRARIES} ${OPENCV_LIBRARIES_MYNTEYE} ${MYNTEYE_LIBRARIES_1})
+
+
+	add_executable(breakdown_initializer ${PROJECT_SOURCE_DIR}/src/main_breakdown_initializer.cpp)
+	target_link_libraries(breakdown_initializer dso ${BOOST_LIBRARIES_MINE} ${SUITESPARSE_LIBRARIES_MINE} ${LIBZIP_LIBRARY} ${Pangolin_LIBRARIES} ${OPENCV_LIBRARIES_MYNTEYE} ${MYNTEYE_LIBRARIES_1})
+
+
 else()
 	message("--- not building dso_dataset, since either don't have openCV or Pangolin.")
 endif()

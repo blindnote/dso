@@ -30,6 +30,11 @@
 
 #include <Eigen/Core>
 #include <iterator>
+
+#include <opencv2/highgui.hpp>
+#include <opencv2/imgproc.hpp>
+#include <opencv2/calib3d.hpp>
+
 #include "util/settings.h"
 #include "util/globalFuncs.h"
 #include "IOWrapper/ImageDisplay.h"
@@ -263,7 +268,8 @@ Undistort::~Undistort()
 	if(remapY != 0) delete[] remapY;
 }
 
-Undistort* Undistort::getUndistorterForFile(std::string configFilename, std::string gammaFilename, std::string vignetteFilename)
+Undistort* Undistort::getUndistorterForFile(std::string configFilename, std::string gammaFilename, std::string vignetteFilename,
+											const std::string& opencv_calib)
 {
 	printf("Reading Calibration from file %s",configFilename.c_str());
 
@@ -291,7 +297,7 @@ Undistort* Undistort::getUndistorterForFile(std::string configFilename, std::str
 			&ic[4], &ic[5], &ic[6], &ic[7]) == 8)
 	{
         printf("found RadTan (OpenCV) camera model, building rectifier.\n");
-        u = new UndistortRadTan(configFilename.c_str(), true);
+        u = new UndistortRadTan(configFilename.c_str(), true, opencv_calib);
 		if(!u->isValid()) {delete u; return 0; }
     }
 
@@ -302,13 +308,13 @@ Undistort* Undistort::getUndistorterForFile(std::string configFilename, std::str
 		if(ic[4]==0)
 		{
 			printf("found PINHOLE camera model, building rectifier.\n");
-            u = new UndistortPinhole(configFilename.c_str(), true);
+            u = new UndistortPinhole(configFilename.c_str(), true, opencv_calib);
 			if(!u->isValid()) {delete u; return 0; }
 		}
 		else
 		{
 			printf("found ATAN camera model, building rectifier.\n");
-            u = new UndistortFOV(configFilename.c_str(), true);
+            u = new UndistortFOV(configFilename.c_str(), true, opencv_calib);
 			if(!u->isValid()) {delete u; return 0; }
 		}
 	}
@@ -322,7 +328,7 @@ Undistort* Undistort::getUndistorterForFile(std::string configFilename, std::str
             &ic[0], &ic[1], &ic[2], &ic[3],
             &ic[4], &ic[5], &ic[6], &ic[7]) == 8)
     {
-        u = new UndistortKB(configFilename.c_str(), false);
+        u = new UndistortKB(configFilename.c_str(), false, opencv_calib);
         if(!u->isValid()) {delete u; return 0; }
     }
 
@@ -331,7 +337,7 @@ Undistort* Undistort::getUndistorterForFile(std::string configFilename, std::str
             &ic[0], &ic[1], &ic[2], &ic[3],
             &ic[4], &ic[5], &ic[6], &ic[7]) == 8)
     {
-        u = new UndistortRadTan(configFilename.c_str(), false);
+        u = new UndistortRadTan(configFilename.c_str(), false, opencv_calib);
         if(!u->isValid()) {delete u; return 0; }
     }
 
@@ -340,7 +346,7 @@ Undistort* Undistort::getUndistorterForFile(std::string configFilename, std::str
             &ic[0], &ic[1], &ic[2], &ic[3],
             &ic[4], &ic[5], &ic[6], &ic[7]) == 8)
     {
-        u = new UndistortEquidistant(configFilename.c_str(), false);
+        u = new UndistortEquidistant(configFilename.c_str(), false, opencv_calib);
         if(!u->isValid()) {delete u; return 0; }
     }
 
@@ -349,7 +355,7 @@ Undistort* Undistort::getUndistorterForFile(std::string configFilename, std::str
             &ic[0], &ic[1], &ic[2], &ic[3],
             &ic[4]) == 5)
     {
-        u = new UndistortFOV(configFilename.c_str(), false);
+        u = new UndistortFOV(configFilename.c_str(), false, opencv_calib);
         if(!u->isValid()) {delete u; return 0; }
     }
 
@@ -358,7 +364,7 @@ Undistort* Undistort::getUndistorterForFile(std::string configFilename, std::str
             &ic[0], &ic[1], &ic[2], &ic[3],
             &ic[4]) == 5)
     {
-        u = new UndistortPinhole(configFilename.c_str(), false);
+        u = new UndistortPinhole(configFilename.c_str(), false, opencv_calib);
         if(!u->isValid()) {delete u; return 0; }
     }
 
@@ -482,6 +488,60 @@ ImageAndExposure* Undistort::undistort(const MinimalImage<T>* image_raw, float e
 }
 template ImageAndExposure* Undistort::undistort<unsigned char>(const MinimalImage<unsigned char>* image_raw, float exposure, double timestamp, float factor) const;
 template ImageAndExposure* Undistort::undistort<unsigned short>(const MinimalImage<unsigned short>* image_raw, float exposure, double timestamp, float factor) const;
+
+
+
+//////////////////////////////////
+template<typename T>
+ImageAndExposure* Undistort::undistort_opencv(const MinimalImage<T>* image_raw, float exposure, double timestamp, float factor) const
+{
+    if(image_raw->w != wOrg || image_raw->h != hOrg)
+    {
+        printf("Undistort::undistort: wrong image size (%d %d instead of %d %d) \n", image_raw->w, image_raw->h, wOrg, hOrg);
+        exit(1);
+    }
+
+    photometricUndist->processFrame<T>(image_raw->data, exposure, factor);
+
+    ImageAndExposure* result = new ImageAndExposure(w, h, timestamp);
+    photometricUndist->output->copyMetaTo(*result);
+
+    if (!passthrough)
+    {
+        float* out_data = result->image;
+        float* in_data = photometricUndist->output->image;
+
+//        uchar* in_data_uchar = new uchar[h*w];
+//        for(auto i=0; i<w*h; i++) { in_data_uchar[i] = (uchar)(in_data[i]); }
+//        cv::Mat input_mat = cv::Mat(h, w, CV_8U, in_data_uchar);
+		cv::Mat input_mat = cv::Mat(h, w, CV_32F, in_data);
+
+        cv::Mat image_undistorted_opencv;
+//        cv::undistort(input_mat, image_undistorted_opencv, K_OpenCV, DistCoeffs_OpenCV);
+		cv::remap(input_mat, image_undistorted_opencv, map1_, map2_,
+				  CV_INTER_LINEAR, cv::BorderTypes::BORDER_CONSTANT);
+
+//		cv::imshow("inside_undistort_uchar", image_undistorted_opencv);
+
+//        memcpy(result->image, (float*)image_undistorted_opencv.data, sizeof(float)*w*h);
+        for(auto i=0; i<w*h; i++)
+		{
+			result->image[i] = image_undistorted_opencv.at<float>(i);
+		}
+    }
+    else
+    {
+        memcpy(result->image, photometricUndist->output->image, sizeof(float)*w*h);
+    }
+
+    applyBlurNoise(result->image);
+
+    return result;
+}
+template ImageAndExposure* Undistort::undistort_opencv<unsigned char>(const MinimalImage<unsigned char>* image_raw, float exposure, double timestamp, float factor) const;
+template ImageAndExposure* Undistort::undistort_opencv<unsigned short>(const MinimalImage<unsigned short>* image_raw, float exposure, double timestamp, float factor) const;
+//////////////////////////////////
+
 
 
 void Undistort::applyBlurNoise(float* img) const
@@ -713,7 +773,7 @@ void Undistort::makeOptimalK_full()
 	assert(false);
 }
 
-void Undistort::readFromFile(const char* configFileName, int nPars, std::string prefix)
+void Undistort::readFromFile(const char* configFileName, int nPars, const std::string& opencv_calib, std::string prefix)
 {
 	photometricUndist=0;
 	valid = false;
@@ -908,6 +968,43 @@ void Undistort::readFromFile(const char* configFileName, int nPars, std::string 
 	}
 
 
+
+    /////////////////////////////////////////////
+	LoadIntrinsics(opencv_calib);
+	if (opencv_enabled_)
+	{
+		cv::Mat new_camera_matrix = cv::getOptimalNewCameraMatrix(K_OpenCV, DistCoeffs_OpenCV,
+																  cv::Size2i(wOrg, hOrg),
+																  0, cv::Size_<int>(w, h), 0, true);
+		std::cout << "new_camera_matrix: " << std::endl << std::setprecision(8) << new_camera_matrix << std::endl;
+
+		K.setIdentity();
+		K(0, 0) = new_camera_matrix.at<double>(0, 0);
+		K(1, 1) = new_camera_matrix.at<double>(1, 1);
+		K(0, 2) = new_camera_matrix.at<double>(0, 2);
+		K(1, 2) = new_camera_matrix.at<double>(1, 2);
+
+		cv::initUndistortRectifyMap(K_OpenCV, DistCoeffs_OpenCV, cv::Mat::eye(cv::Size_<int>(3,3), CV_32FC1),
+									new_camera_matrix, cv::Size_<int>(w, h), CV_32FC1, map1_, map2_);
+
+		for(auto p = 0; p < w * h; p++)
+		{
+			remapX[p] = map1_.at<float>(p);
+			remapY[p] = map2_.at<float>(p);
+		}
+
+		valid = true;
+		return;
+
+
+//		K(0,0) = parsOrg[0];
+//		K(1,1) = parsOrg[1];
+//		K(0,2) = parsOrg[2];
+//		K(1,2) = parsOrg[3];
+	}
+    /////////////////////////////////////////////
+
+
 	for(int y=0;y<h;y++)
 		for(int x=0;x<w;x++)
 		{
@@ -953,14 +1050,15 @@ void Undistort::readFromFile(const char* configFileName, int nPars, std::string 
 }
 
 
-UndistortFOV::UndistortFOV(const char* configFileName, bool noprefix)
+UndistortFOV::UndistortFOV(const char* configFileName, bool noprefix, const std::string& opencv_calib)
 {
     printf("Creating FOV undistorter\n");
+	opencv_enabled_ = false;
 
     if(noprefix)
-        readFromFile(configFileName, 5);
+        readFromFile(configFileName, 5, opencv_calib);
     else
-        readFromFile(configFileName, 5, "FOV ");
+        readFromFile(configFileName, 5, opencv_calib, "FOV ");
 }
 UndistortFOV::~UndistortFOV()
 {
@@ -1009,14 +1107,15 @@ void UndistortFOV::distortCoordinates(float* in_x, float* in_y, float* out_x, fl
 
 
 
-UndistortRadTan::UndistortRadTan(const char* configFileName, bool noprefix)
+UndistortRadTan::UndistortRadTan(const char* configFileName, bool noprefix, const std::string& opencv_calib)
 {
     printf("Creating RadTan undistorter\n");
+	opencv_enabled_ = false;
 
     if(noprefix)
-        readFromFile(configFileName, 8);
+        readFromFile(configFileName, 8, opencv_calib);
     else
-        readFromFile(configFileName, 8,"RadTan ");
+        readFromFile(configFileName, 8, opencv_calib, "RadTan ");
 }
 UndistortRadTan::~UndistortRadTan()
 {
@@ -1069,14 +1168,15 @@ void UndistortRadTan::distortCoordinates(float* in_x, float* in_y, float* out_x,
 
 
 
-UndistortEquidistant::UndistortEquidistant(const char* configFileName, bool noprefix)
+UndistortEquidistant::UndistortEquidistant(const char* configFileName, bool noprefix, const std::string& opencv_calib)
 {
     printf("Creating Equidistant undistorter\n");
+	opencv_enabled_ = false;
 
     if(noprefix)
-        readFromFile(configFileName, 8);
+        readFromFile(configFileName, 8, opencv_calib);
     else
-        readFromFile(configFileName, 8,"EquiDistant ");
+        readFromFile(configFileName, 8, opencv_calib, "EquiDistant ");
 }
 UndistortEquidistant::~UndistortEquidistant()
 {
@@ -1128,14 +1228,15 @@ void UndistortEquidistant::distortCoordinates(float* in_x, float* in_y, float* o
 
 
 
-UndistortKB::UndistortKB(const char* configFileName, bool noprefix)
+UndistortKB::UndistortKB(const char* configFileName, bool noprefix, const std::string& opencv_calib)
 {
 	printf("Creating KannalaBrandt undistorter\n");
+	opencv_enabled_ = false;
 
     if(noprefix)
-        readFromFile(configFileName, 8);
+        readFromFile(configFileName, 8, opencv_calib);
     else
-        readFromFile(configFileName, 8,"KannalaBrandt ");
+        readFromFile(configFileName, 8, opencv_calib, "KannalaBrandt ");
 }
 UndistortKB::~UndistortKB()
 {
@@ -1194,12 +1295,14 @@ void UndistortKB::distortCoordinates(float* in_x, float* in_y, float* out_x, flo
 
 
 
-UndistortPinhole::UndistortPinhole(const char* configFileName, bool noprefix)
+UndistortPinhole::UndistortPinhole(const char* configFileName, bool noprefix, const std::string& opencv_calib)
 {
+	opencv_enabled_ = false;
+
     if(noprefix)
-        readFromFile(configFileName, 5);
+        readFromFile(configFileName, 5, opencv_calib);
     else
-        readFromFile(configFileName, 5,"Pinhole ");
+        readFromFile(configFileName, 5, opencv_calib, "Pinhole ");
 
 }
 UndistortPinhole::~UndistortPinhole()

@@ -102,7 +102,8 @@ struct PrepImageItem
 class ImageFolderReader
 {
 public:
-	ImageFolderReader(std::string path, std::string calibFile, std::string gammaFile, std::string vignetteFile)
+	ImageFolderReader(std::string path, std::string calibFile, std::string gammaFile, std::string vignetteFile,
+                      const std::string& opencv_calib = "")
 	{
 		this->path = path;
 		this->calibfile = calibFile;
@@ -150,7 +151,7 @@ public:
 			getdir (path, files);
 
 
-		undistort = Undistort::getUndistorterForFile(calibFile, gammaFile, vignetteFile);
+		undistort = Undistort::getUndistorterForFile(calibFile, gammaFile, vignetteFile, opencv_calib);
 
 
 		widthOrg = undistort->getOriginalSize()[0];
@@ -229,6 +230,11 @@ public:
 		return getImage_internal(id, 0);
 	}
 
+	ImageAndExposure* getImage_OpenCV(int id, bool forceLoadDirectly=false)
+	{
+		return getImage_internal_opencv(id, 0);
+	}
+
 
 	inline float* getPhotometricGamma()
 	{
@@ -287,6 +293,23 @@ private:
 				minimg,
 				(exposures.size() == 0 ? 1.0f : exposures[id]),
 				(timestamps.size() == 0 ? 0.0 : timestamps[id]));
+		delete minimg;
+		return ret2;
+	}
+
+	ImageAndExposure* getImage_internal_opencv(int id, int unused)
+	{
+		MinimalImageB* minimg = getImageRaw_internal(id, 0);
+		ImageAndExposure* ret2 = ( undistort->opencv_enabled_ ) ?
+								 undistort->undistort_opencv<unsigned char>(
+										 minimg,
+										 (exposures.size() == 0 ? 1.0f : exposures[id]),
+										 (timestamps.size() == 0 ? 0.0 : timestamps[id])) :
+								 undistort->undistort<unsigned char>(
+										 minimg,
+										 (exposures.size() == 0 ? 1.0f : exposures[id]),
+										 (timestamps.size() == 0 ? 0.0 : timestamps[id]));
+
 		delete minimg;
 		return ret2;
 	}
@@ -354,8 +377,6 @@ private:
 
 		printf("got %d images and %d timestamps and %d exposures.!\n", (int)getNumImages(), (int)timestamps.size(), (int)exposures.size());
 	}
-
-
 
 
 	std::vector<ImageAndExposure*> preloadedImages;

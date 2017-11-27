@@ -1108,17 +1108,17 @@ void FullSystem::makeKeyFrame( FrameHessian* fh)
 	{
 		if(allKeyFramesHistory.size()==2 && rmse > 20*benchmark_initializerSlackFactor)
 		{
-			printf("I THINK INITIALIZATINO FAILED! Resetting.\n");
+			printf("I THINK INITIALIZATINO FAILED! Resetting.[2]rmse:%.8f\n", rmse);
 			initFailed=true;
 		}
 		if(allKeyFramesHistory.size()==3 && rmse > 13*benchmark_initializerSlackFactor)
 		{
-			printf("I THINK INITIALIZATINO FAILED! Resetting.\n");
+			printf("I THINK INITIALIZATINO FAILED! Resetting.[3]rmse:%.8f\n", rmse);
 			initFailed=true;
 		}
 		if(allKeyFramesHistory.size()==4 && rmse > 9*benchmark_initializerSlackFactor)
 		{
-			printf("I THINK INITIALIZATINO FAILED! Resetting.\n");
+			printf("I THINK INITIALIZATINO FAILED! Resetting.[4]rmse:%.8f\n", rmse);
 			initFailed=true;
 		}
 	}
