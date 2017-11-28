@@ -28,7 +28,8 @@
  *  Created on: Jan 7, 2014
  *      Author: engelj
  */
-
+#include <stdlib.h>
+#include <opencv2/highgui.hpp>
 #include "FullSystem/CoarseInitializer.h"
 #include "FullSystem/FullSystem.h"
 #include "FullSystem/HessianBlocks.h"
@@ -269,7 +270,9 @@ bool CoarseInitializer::trackFrame(FrameHessian* newFrameHessian, std::vector<IO
 		snappedAt = frameID;
 
 
-
+	printf("snapped(%s) && frameID(%d) > snappedAt(%d)+5 = %s\n",
+		   snapped ? "true" : "false", frameID, snappedAt,
+		   (snapped && frameID > snappedAt+5) ? "true" : "false");
     debugPlot(0,wraps);
 
 
@@ -322,7 +325,7 @@ void CoarseInitializer::debugPlot(int lvl, std::vector<IOWrap::Output3DWrapper*>
 	}
 
 
-	//IOWrap::displayImage("idepth-R", &iRImg, false);
+//	IOWrap::displayImage("idepth-R", &iRImg, false);
     for(IOWrap::Output3DWrapper* ow : wraps)
         ow->pushDepthImage(&iRImg);
 }
@@ -1041,5 +1044,95 @@ void CoarseInitializer::makeNN()
 	for(int i=0;i<pyrLevelsUsed;i++)
 		delete indexes[i];
 }
+
+void CoarseInitializer::DislayPoints(int lvl)
+{
+    int wl = w[lvl], hl = h[lvl];
+    Eigen::Vector3f* colorRef = firstFrame->dIp[lvl];
+
+    MinimalImageB3 iRImg(wl,hl);
+
+    for(int i=0;i<wl*hl;i++)
+        iRImg.at(i) = Vec3b(colorRef[i][0],colorRef[i][0],colorRef[i][0]);
+
+
+    int npts = numPoints[lvl];
+
+    float nid = 0, sid=0;
+    for(int i=0;i<npts;i++)
+    {
+        Pnt* point = points[lvl]+i;
+        if(point->isGood)
+        {
+            nid++;
+            sid += point->iR;
+        }
+    }
+    float fac = nid / sid;
+
+
+
+    for(int i=0;i<npts;i++)
+    {
+        Pnt* point = points[lvl]+i;
+
+        if (point->isGood)
+//        if(!point->isGood)
+//            iRImg.setPixel9(point->u+0.5f,point->v+0.5f,Vec3b(0,0,0));
+//
+//        else
+            iRImg.setPixel9(point->u+0.5f,point->v+0.5f,makeRainbow3B(point->iR*fac));
+
+    }
+
+	IOWrap::displayImage("idepth-R", &iRImg, false);
+    cv::waitKey(0);
+}
+
+void CoarseInitializer::DislayChosenPoints(int lvl, std::vector<int>& indexes)
+{
+	int wl = w[lvl], hl = h[lvl];
+	Eigen::Vector3f* colorRef = firstFrame->dIp[lvl];
+
+	MinimalImageB3 iRImg(wl,hl);
+
+	for(int i=0;i<wl*hl;i++)
+		iRImg.at(i) = Vec3b(colorRef[i][0],colorRef[i][0],colorRef[i][0]);
+
+
+	int npts = numPoints[lvl];
+
+	float nid = 0, sid=0;
+	for(int i=0;i<npts;i++)
+	{
+		Pnt* point = points[lvl]+i;
+		if(point->isGood)
+		{
+			nid++;
+			sid += point->iR;
+		}
+	}
+	float fac = nid / sid;
+
+
+
+	for(int i=0;i<indexes.size();i++)
+	{
+		int idx = indexes[i];
+		Pnt* point = points[lvl]+idx;
+
+//		if (point->isGood)
+//        if(!point->isGood)
+//            iRImg.setPixel9(point->u+0.5f,point->v+0.5f,Vec3b(0,0,0));
+//
+//        else
+			iRImg.setPixel9(point->u+0.5f,point->v+0.5f,makeRainbow3B(point->iR*fac));
+
+	}
+
+	IOWrap::displayImage("idepth-R", &iRImg, false);
+	cv::waitKey(0);
+}
+
 }
 

@@ -142,6 +142,11 @@ void displayImage(const char* windowName, const ImageAndExposure* img, bool auto
 	displayImage(windowName, cv::Mat(img->h, img->w, CV_32F, img->image)*(1/254.0f), autoSize);
 }
 
+void displayImage(const char* windowName, float* img, int w, int h, bool autoSize)
+{
+    displayImage(windowName, cv::Mat(h, w, CV_32F, img)*(1/254.0f), autoSize);
+}
+
 
 void displayImageStitch(const char* windowName, const std::vector<MinimalImageB*> images, int cc, int rc)
 {

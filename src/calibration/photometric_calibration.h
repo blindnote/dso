@@ -24,7 +24,7 @@ public:
     void ApplyCorrection(ImageAndExposure* output_image, T* input_image,
                          float exposure_time, float factor = 1.0);
 
-    float* GetGammaInv()
+    const float* GetGammaInv()
     {
         return !gamma_valid_ ? 0 : gamma_inv_;
     }

@@ -76,6 +76,8 @@ public:
 	float outlierTH;
 };
 
+
+
 class CoarseInitializer {
 public:
 	EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
@@ -86,6 +88,7 @@ public:
 	void setFirst(	CalibHessian* HCalib, FrameHessian* newFrameHessian);
 	bool trackFrame(FrameHessian* newFrameHessian, std::vector<IOWrap::Output3DWrapper*> &wraps);
 	void calcTGrads(FrameHessian* newFrameHessian);
+	void DislayChosenPoints(int lvl, std::vector<int>& indexes);
 
 	int frameID;
 	bool fixAffine;
@@ -158,6 +161,7 @@ private:
 	void makeGradients(Eigen::Vector3f** data);
 
     void debugPlot(int lvl, std::vector<IOWrap::Output3DWrapper*> &wraps);
+	void DislayPoints(int lvl);
 	void makeNN();
 };
 

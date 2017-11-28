@@ -56,6 +56,7 @@ set(dso_SOURCE_FILES
 
   ${PROJECT_SOURCE_DIR}/src/calibration/geometric_calibration.cpp
   ${PROJECT_SOURCE_DIR}/src/calibration/photometric_calibration.cpp
+  ${PROJECT_SOURCE_DIR}/src/monovo/system.cpp
 )
 
 

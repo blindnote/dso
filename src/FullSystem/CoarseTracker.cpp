@@ -785,6 +785,9 @@ void CoarseTracker::debugPlotIDepthMap(float* minID_pt, float* maxID_pt, std::ve
 			for(int x=3;x<wl-3;x++)
 			{
 				int idx=x+y*wl;
+				if(idepth[lvl][idx] <= 0)
+					continue;
+
 				float sid=0, nid=0;
 				float* bp = idepth[lvl]+idx;
 

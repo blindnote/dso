@@ -835,8 +835,8 @@ void FullSystem::addActiveFrame( ImageAndExposure* image, int id )
 		}
 		else if(coarseInitializer->trackFrame(fh, outputWrapper))	// if SNAPPED
 		{
-
-			initializeFromInitializer(fh);
+//			initializeFromInitializer(fh);
+			initializeFromPointsWithSortedEnergy(fh);
 			lock.unlock();
 			deliverTrackedFrame(fh, true);
 		}
@@ -1144,7 +1144,7 @@ void FullSystem::makeKeyFrame( FrameHessian* fh)
 
 
         coarseTracker_forNewKF->debugPlotIDepthMap(&minIdJetVisTracker, &maxIdJetVisTracker, outputWrapper);
-        coarseTracker_forNewKF->debugPlotIDepthMapFloat(outputWrapper);
+//        coarseTracker_forNewKF->debugPlotIDepthMapFloat(outputWrapper);
 	}
 
 
@@ -1232,15 +1232,14 @@ void FullSystem::initializeFromInitializer(FrameHessian* newFrame)
         printf("Initialization: keep %.1f%% (need %d, have %d)!\n", 100*keepPercentage,
                 (int)(setting_desiredPointDensity), coarseInitializer->numPoints[0] );
 
+
 	for(int i=0;i<coarseInitializer->numPoints[0];i++)
 	{
 		if(rand()/(float)RAND_MAX > keepPercentage) continue;
 
 		Pnt* point = coarseInitializer->points[0]+i;
 		ImmaturePoint* pt = new ImmaturePoint(point->u+0.5f,point->v+0.5f,firstFrame,point->my_type, &Hcalib);
-
 		if(!std::isfinite(pt->energyTH)) { delete pt; continue; }
-
 
 		pt->idepth_max=pt->idepth_min=1;
 		PointHessian* ph = new PointHessian(pt, &Hcalib);
@@ -1282,6 +1281,140 @@ void FullSystem::initializeFromInitializer(FrameHessian* newFrame)
 	initialized=true;
 	printf("INITIALIZE FROM INITIALIZER (%d pts)!\n", (int)firstFrame->pointHessians.size());
 }
+
+
+
+void FullSystem::initializeFromPointsWithSortedEnergy(FrameHessian* newFrame)
+{
+	boost::unique_lock<boost::mutex> lock(mapMutex);
+
+	// add firstframe.
+	FrameHessian* firstFrame = coarseInitializer->firstFrame;
+	firstFrame->idx = frameHessians.size();
+	frameHessians.push_back(firstFrame);
+	firstFrame->frameID = allKeyFramesHistory.size();
+	allKeyFramesHistory.push_back(firstFrame->shell);
+	ef->insertFrame(firstFrame, &Hcalib);
+	setPrecalcValues();
+
+	//int numPointsTotal = makePixelStatus(firstFrame->dI, selectionMap, wG[0], hG[0], setting_desiredDensity);
+	//int numPointsTotal = pixelSelector->makeMaps(firstFrame->dIp, selectionMap,setting_desiredDensity);
+
+	firstFrame->pointHessians.reserve(wG[0]*hG[0]*0.2f);
+	firstFrame->pointHessiansMarginalized.reserve(wG[0]*hG[0]*0.2f);
+	firstFrame->pointHessiansOut.reserve(wG[0]*hG[0]*0.2f);
+
+
+	float sumID=1e-5, numID=1e-5;
+	for(int i=0;i<coarseInitializer->numPoints[0];i++)
+	{
+		sumID += coarseInitializer->points[0][i].iR;
+		numID++;
+	}
+	float rescaleFactor = 1 / (sumID / numID);
+
+	// randomly sub-select the points I need.
+//	float keepPercentage = setting_desiredPointDensity / coarseInitializer->numPoints[0];
+//
+//    if(!setting_debugout_runquiet)
+//        printf("Initialization: keep %.1f%% (need %d, have %d)!\n", 100*keepPercentage,
+//                (int)(setting_desiredPointDensity), coarseInitializer->numPoints[0] );
+
+	/////////////////////////////////////////////////////////////////
+	struct tmpPnt
+	{
+		tmpPnt(float U, float V, float type, float ir, float energy, int idx)
+		{
+			u = U;
+			v = V;
+			my_type = type;
+			iR = ir;
+			energy0 = energy;
+			index = idx;
+		}
+		float u, v;
+		float my_type;
+		float iR;
+		float energy0;
+		int index;
+
+		bool operator<(const tmpPnt& p) const
+		{
+			return energy0 < p.energy0;
+		}
+	};
+	std::vector<tmpPnt> points;
+	for(int i = 0; i < coarseInitializer->numPoints[0]; i++)
+	{
+		Pnt* point = coarseInitializer->points[0]+i;
+		if (point->isGood)
+			points.push_back(tmpPnt(point->u, point->v,
+									point->my_type, point->iR,
+									point->energy[0], i));
+	}
+	std::sort(points.begin(), points.end());
+
+
+	int chosen_count = 0;
+	std::vector<int> indexes;
+	for (int i = 0; i < points.size() && chosen_count <= setting_desiredPointDensity; i++)
+//	for(int i=0;i<coarseInitializer->numPoints[0];i++)
+	{
+//		if(rand()/(float)RAND_MAX > keepPercentage) continue;
+
+//		Pnt* point = coarseInitializer->points[0]+i;
+//		ImmaturePoint* pt = new ImmaturePoint(point->u+0.5f,point->v+0.5f,firstFrame,point->my_type, &Hcalib);
+		tmpPnt point = points[i];
+		ImmaturePoint* pt = new ImmaturePoint(point.u+0.5f, point.v+0.5f, firstFrame, point.my_type, &Hcalib);
+
+		if(!std::isfinite(pt->energyTH)) { delete pt; continue; }
+
+
+		pt->idepth_max=pt->idepth_min=1;
+		PointHessian* ph = new PointHessian(pt, &Hcalib);
+		delete pt;
+		if(!std::isfinite(ph->energyTH)) {delete ph; continue;}
+
+		chosen_count++;
+
+//		ph->setIdepthScaled(point->iR*rescaleFactor);
+		ph->setIdepthScaled(point.iR*rescaleFactor);
+		ph->setIdepthZero(ph->idepth);
+		ph->hasDepthPrior=true;
+		ph->setPointStatus(PointHessian::ACTIVE);
+
+		firstFrame->pointHessians.push_back(ph);
+		ef->insertPoint(ph);
+	}
+
+
+
+	SE3 firstToNew = coarseInitializer->thisToNext;
+	firstToNew.translation() /= rescaleFactor;
+
+
+	// really no lock required, as we are initializing.
+	{
+		boost::unique_lock<boost::mutex> crlock(shellPoseMutex);
+		firstFrame->shell->camToWorld = SE3();
+		firstFrame->shell->aff_g2l = AffLight(0,0);
+		firstFrame->setEvalPT_scaled(firstFrame->shell->camToWorld.inverse(),firstFrame->shell->aff_g2l);
+		firstFrame->shell->trackingRef=0;
+		firstFrame->shell->camToTrackingRef = SE3();
+
+		newFrame->shell->camToWorld = firstToNew.inverse();
+		newFrame->shell->aff_g2l = AffLight(0,0);
+		newFrame->setEvalPT_scaled(newFrame->shell->camToWorld.inverse(),newFrame->shell->aff_g2l);
+		newFrame->shell->trackingRef = firstFrame->shell;
+		newFrame->shell->camToTrackingRef = firstToNew.inverse();
+
+	}
+
+	initialized=true;
+	printf("INITIALIZE FROM INITIALIZER (%d pts)!\n", (int)firstFrame->pointHessians.size());
+}
+
+
 
 void FullSystem::makeNewTraces(FrameHessian* newFrame, float* gtDepth)
 {
