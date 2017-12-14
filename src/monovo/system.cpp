@@ -26,12 +26,23 @@ System::~System()
 }
 
 
-void System::AddFrame(ImageAndExposure *p_img, int id)
+bool System::AddFrame(ImageAndExposure *p_img, int id)
 {
     assert(p_img != nullptr);
 
     FrameHessian* new_fh = new FrameHessian();
     new_fh->ab_exposure = p_img->exposure_time;
+//    if (id == 1)
+//    {
+//        std::ofstream myfile;
+//        float *color = p_img->image;
+//        myfile.open("/Users/yinr/Desktop/me_processed_float_img.txt");
+//        for (int i = 0; i < p_img->w * p_img->h; i++) {
+//            myfile << "[" << i << "]" << std::setprecision(8) << color[i] << ",";
+//            if ((i + 1) % p_img->w == 0) myfile << std::endl;
+//        }
+//        myfile.close();
+//    }
     new_fh->makeImages(p_img->image, &hessian_calib_);
 
     // Display purpose Only!
@@ -52,38 +63,40 @@ void System::AddFrame(ImageAndExposure *p_img, int id)
 //        }
 //    }
 
-
     std::vector<IOWrap::Output3DWrapper*> vec;
 
-    switch (status_)
+    switch (GetStatus())
     {
         case Status::NOT_STARTED_YET:
-            printf("Try setting 1st frame_%d ...\n", id);
+            printf("Try setting 1st frame_%d ...", id);
             sp_initializer_->setFirst(&hessian_calib_, new_fh);
             SetStatus(Status::START_INITIALIZATION);
+            printf("Done!\n");
             break;
 
         case Status::START_INITIALIZATION:
             printf("Try initializing frame_%d ...\n", id);
             if (sp_initializer_->trackFrame(new_fh, vec))
             {
-                Initialize2(new_fh);
+                InitializeWithPointsSorted(new_fh);
                 SetStatus(Status::INITIALIZED);
             }
             break;
 
         case Status::INITIALIZED:
+            printf("Start tracking on frame_%d ...\n", id);
+            SetStatus(Status::ON_TRACK);
             break;
 
         case Status::ON_TRACK:
-            printf("Already lost!! Stop processing frame_%d ...\n", id);
             break;
 
         case Status::LOST:
-            break;
-
+            printf("Already lost!! Stop processing frame_%d ...\n", id);
+            return false;
     }
 
+    return true;
 }
 
 
@@ -115,7 +128,7 @@ void System::SetGammaFunction(const float* BInv)
 }
 
 
-void System::Initialize2(FrameHessian *p_fh)
+void System::InitializeWithPointsSorted(FrameHessian *p_fh)
 {
     FrameHessian* firstFrame = sp_initializer_->firstFrame;
     firstFrame->idx = vec_hessian_frames.size();
@@ -134,11 +147,19 @@ void System::Initialize2(FrameHessian *p_fh)
     }
     float rescaleFactor = 1 / (sumID / numID);
 
+    // randomly sub-select the points I need.
+    float keepPercentage = setting_desiredPointDensity / sp_initializer_->numPoints[0];
+
+//    if (!setting_debugout_runquiet)
+        printf("Initialization: keep %.1f%% (need %d, have %d)!\n", 100*keepPercentage,
+           (int)(setting_desiredPointDensity), sp_initializer_->numPoints[0] );
+
     /////////////////////////////////////////////////////////////////
     struct tmpPnt
     {
-        tmpPnt(float U, float V, float type, float ir, float energy, int idx)
+        tmpPnt(bool quality, float U, float V, float type, float ir, float energy, int idx)
         {
+            good = quality;
             u = U;
             v = V;
             my_type = type;
@@ -146,6 +167,7 @@ void System::Initialize2(FrameHessian *p_fh)
             energy0 = energy;
             index = idx;
         }
+        bool good;
         float u, v;
         float my_type;
         float iR;
@@ -157,26 +179,52 @@ void System::Initialize2(FrameHessian *p_fh)
             return energy0 < p.energy0;
         }
     };
-    std::vector<tmpPnt> points;
+
+    std::vector<tmpPnt> points, bad_points;
     for(int i = 0; i < sp_initializer_->numPoints[0]; i++)
     {
-        Pnt* point = sp_initializer_->points[0]+i;
+        Pnt* point = sp_initializer_->points[0] + i;
         if (point->isGood)
-            points.push_back(tmpPnt(point->u, point->v,
+            points.push_back(tmpPnt(point->isGood,
+                                    point->u, point->v,
                                     point->my_type, point->iR,
                                     point->energy[0], i));
+        else
+            bad_points.push_back(tmpPnt(point->isGood,
+                                         point->u, point->v,
+                                         point->my_type, point->iR,
+                                         point->energy[0], i));
     }
     std::sort(points.begin(), points.end());
+    printf("good: %d\n", points.size());
 
-//    std::ofstream myfile;
-//    myfile.open ("/Users/yinr/Desktop/two_table_points_sort.txt");
-//    myfile << std::setprecision(4);
+
+    points.insert(std::end(points), std::begin(bad_points), std::end(bad_points));
+
+
+    std::ofstream myfile;
+    myfile.open ("/Users/yinr/Desktop/two_table_points_sorted.txt");
+    myfile << std::setprecision(4);
+    for(auto i = 0; i < points.size(); i++)
+    {
+        tmpPnt point = points[i];
+        myfile << "[" << i << "]" << point.u << ", " << point.v
+               << ", " << (point.good ? "true" : "false")
+               << ", " << point.energy0 << std::endl;
+    }
+    myfile.close();
+    /////////////////////////////////////////////////////////////////
 
     int chosen_count = 0;
+    int bad_chosen_count = 0;
     std::vector<int> indexes;
     for (int i = 0; i < points.size() && chosen_count <= setting_desiredPointDensity; i++)
     {
         tmpPnt point = points[i];
+
+        if (!point.good &&
+            rand()/(float)RAND_MAX > keepPercentage)
+            continue;
 
         ImmaturePoint* pt = new ImmaturePoint(point.u+0.5f, point.v+0.5f, firstFrame, point.my_type, &hessian_calib_);
 
@@ -188,9 +236,8 @@ void System::Initialize2(FrameHessian *p_fh)
         delete pt;
         if(!std::isfinite(ph->energyTH)) {delete ph; continue;}
 
-//        myfile << "[" << i << "]" << point.u << ", " << point.v << std::endl;
-
         chosen_count++;
+        if (!point.good) bad_chosen_count++;
         indexes.push_back(point.index);
 
         ph->setIdepthScaled(point.iR * rescaleFactor);
@@ -202,8 +249,10 @@ void System::Initialize2(FrameHessian *p_fh)
 //        ef->insertPoint(ph);
     }
 
-//    myfile.close();
-    printf("INITIALIZE FROM INITIALIZER (%d pts)!\n", (int)firstFrame->pointHessians.size());
+    printf("INITIALIZE FROM INITIALIZER (%d pts: good:%d, bad:%d)!\n",
+           (int)firstFrame->pointHessians.size(),
+           (int)firstFrame->pointHessians.size() - bad_chosen_count,
+           bad_chosen_count);
 
     sp_initializer_->DislayChosenPoints(0, indexes);
 }
@@ -241,10 +290,10 @@ void System::Initialize(FrameHessian *p_fh)
         printf("Initialization: keep %.1f%% (need %d, have %d)!\n", 100*keepPercentage,
                (int)(setting_desiredPointDensity), sp_initializer_->numPoints[0] );
 
-    std::ofstream myfile;
-    myfile.open ("/Users/yinr/Desktop/two_table_points.txt");
-    myfile << std::setprecision(4);
-
+//    std::ofstream myfile;
+//    myfile.open ("/Users/yinr/Desktop/two_table_points.txt");
+//    myfile << std::setprecision(4);
+    std::vector<int> indexes;
     for (int i = 0; i < sp_initializer_->numPoints[0]; i++)
     {
         if (rand()/(float)RAND_MAX > keepPercentage) continue;
@@ -260,7 +309,8 @@ void System::Initialize(FrameHessian *p_fh)
         delete pt;
         if(!std::isfinite(ph->energyTH)) {delete ph; continue;}
 
-        myfile << "[" << i << "]" << point->u << ", " << point->v << std::endl;
+//        myfile << "[" << i << "]" << point->u << ", " << point->v << std::endl;
+        indexes.push_back(i);
 
         ph->setIdepthScaled(point->iR * rescaleFactor);
         ph->setIdepthZero(ph->idepth);
@@ -270,7 +320,7 @@ void System::Initialize(FrameHessian *p_fh)
         firstFrame->pointHessians.push_back(ph);
 //        ef->insertPoint(ph);
     }
-    myfile.close();
+//    myfile.close();
 
 //    SE3 firstToNew = coarseInitializer->thisToNext;
 //    firstToNew.translation() /= rescaleFactor;
@@ -294,6 +344,7 @@ void System::Initialize(FrameHessian *p_fh)
 //    }
 
     printf("INITIALIZE FROM INITIALIZER (%d pts)!\n", (int)firstFrame->pointHessians.size());
+    sp_initializer_->DislayChosenPoints(0, indexes);
 }
 
 void System::SetPreCalculateValues()

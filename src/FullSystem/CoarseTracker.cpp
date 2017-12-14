@@ -115,8 +115,16 @@ void CoarseTracker::makeK(CalibHessian* HCalib)
 		h[level] = h[0] >> level;
 		fx[level] = fx[level-1] * 0.5;
 		fy[level] = fy[level-1] * 0.5;
-		cx[level] = (cx[0] + 0.5) / ((int)1<<level) - 0.5;
-		cy[level] = (cy[0] + 0.5) / ((int)1<<level) - 0.5;
+        if (plus_dot_five)
+        {
+            cx[level] = (cx[0] + 0.5) / ((int) 1 << level) - 0.5;
+            cy[level] = (cy[0] + 0.5) / ((int) 1 << level) - 0.5;
+        }
+        else
+        {
+            cx[level] = cx[0] / ((int) 1 << level);
+            cy[level] = cy[0] / ((int) 1 << level);
+        }
 	}
 
 	for (int level = 0; level < pyrLevelsUsed; ++ level)
@@ -146,8 +154,8 @@ void CoarseTracker::makeCoarseDepthL0(std::vector<FrameHessian*> frameHessians)
 			{
 				PointFrameResidual* r = ph->lastResiduals[0].first;
 				assert(r->efResidual->isActive() && r->target == lastRef);
-				int u = r->centerProjectedTo[0] + 0.5f;
-				int v = r->centerProjectedTo[1] + 0.5f;
+				int u = plus_dot_five ? (r->centerProjectedTo[0] + 0.5f) : r->centerProjectedTo[0];
+				int v = plus_dot_five ? (r->centerProjectedTo[1] + 0.5f) : r->centerProjectedTo[1];
 				float new_idepth = r->centerProjectedTo[2];
 				float weight = sqrtf(1e-3 / (ph->efPoint->HdiF+1e-12));
 
@@ -335,19 +343,27 @@ void CoarseTracker::calcGSSSE(int lvl, Mat88 &H_out, Vec8 &b_out, const SE3 &ref
 	}
 
 	acc.finish();
-	H_out = acc.H.topLeftCorner<8,8>().cast<double>() * (1.0f/n);
-	b_out = acc.H.topRightCorner<8,1>().cast<double>() * (1.0f/n);
+//	H_out = acc.H.topLeftCorner<8,8>().cast<double>() * (1.0f/n);
+//	b_out = acc.H.topRightCorner<8,1>().cast<double>() * (1.0f/n);
+    H_out = acc.H.topLeftCorner<8,8>().cast<double>() * (0.01/(w[lvl]*h[lvl]));
+    b_out = acc.H.topRightCorner<8,1>().cast<double>() * (0.01/(w[lvl]*h[lvl]));
 
-	H_out.block<8,3>(0,0) *= SCALE_XI_ROT;
-	H_out.block<8,3>(0,3) *= SCALE_XI_TRANS;
+//	H_out.block<8,3>(0,0) *= SCALE_XI_ROT;
+//	H_out.block<8,3>(0,3) *= SCALE_XI_TRANS;
+	H_out.block<8,3>(0,0) *= SCALE_XI_TRANS;
+	H_out.block<8,3>(0,3) *= SCALE_XI_ROT;
 	H_out.block<8,1>(0,6) *= SCALE_A;
 	H_out.block<8,1>(0,7) *= SCALE_B;
-	H_out.block<3,8>(0,0) *= SCALE_XI_ROT;
-	H_out.block<3,8>(3,0) *= SCALE_XI_TRANS;
+//	H_out.block<3,8>(0,0) *= SCALE_XI_ROT;
+//	H_out.block<3,8>(3,0) *= SCALE_XI_TRANS;
+	H_out.block<3,8>(0,0) *= SCALE_XI_TRANS;
+	H_out.block<3,8>(3,0) *= SCALE_XI_ROT;
 	H_out.block<1,8>(6,0) *= SCALE_A;
 	H_out.block<1,8>(7,0) *= SCALE_B;
-	b_out.segment<3>(0) *= SCALE_XI_ROT;
-	b_out.segment<3>(3) *= SCALE_XI_TRANS;
+//	b_out.segment<3>(0) *= SCALE_XI_ROT;
+//	b_out.segment<3>(3) *= SCALE_XI_TRANS;
+	b_out.segment<3>(0) *= SCALE_XI_TRANS;
+	b_out.segment<3>(3) *= SCALE_XI_ROT;
 	b_out.segment<1>(6) *= SCALE_A;
 	b_out.segment<1>(7) *= SCALE_B;
 }
@@ -474,7 +490,7 @@ Vec6 CoarseTracker::calcRes(int lvl, const SE3 &refToNew, AffLight aff_g2l, floa
 			buf_warped_dx[numTermsInWarped] = hitColor[1];
 			buf_warped_dy[numTermsInWarped] = hitColor[2];
 			buf_warped_residual[numTermsInWarped] = residual;
-			buf_warped_weight[numTermsInWarped] = hw;
+			buf_warped_weight[numTermsInWarped] = 2.0 * hw;
 			buf_warped_refColor[numTermsInWarped] = lpc_color[i];
 			numTermsInWarped++;
 		}
@@ -629,8 +645,10 @@ bool CoarseTracker::trackNewestCoarse(
 			inc *= extrapFac;
 
 			Vec8 incScaled = inc;
-			incScaled.segment<3>(0) *= SCALE_XI_ROT;
-			incScaled.segment<3>(3) *= SCALE_XI_TRANS;
+//			incScaled.segment<3>(0) *= SCALE_XI_ROT;
+//			incScaled.segment<3>(3) *= SCALE_XI_TRANS;
+			incScaled.segment<3>(0) *= SCALE_XI_TRANS;
+			incScaled.segment<3>(3) *= SCALE_XI_ROT;
 			incScaled.segment<1>(6) *= SCALE_A;
 			incScaled.segment<1>(7) *= SCALE_B;
 
@@ -895,8 +913,8 @@ void CoarseDistanceMap::makeDistanceMap(
 		{
 			assert(ph->status == PointHessian::ACTIVE);
 			Vec3f ptp = KRKi * Vec3f(ph->u, ph->v, 1) + Kt*ph->idepth_scaled;
-			int u = ptp[0] / ptp[2] + 0.5f;
-			int v = ptp[1] / ptp[2] + 0.5f;
+			int u = plus_dot_five ? (ptp[0] / ptp[2] + 0.5f) : (ptp[0] / ptp[2]);
+			int v = plus_dot_five ? (ptp[1] / ptp[2] + 0.5f) : (ptp[1] / ptp[2]);
 			if(!(u > 0 && v > 0 && u < w[1] && v < h[1])) continue;
 			fwdWarpedIDDistFinal[u+w1*v]=0;
 			bfsList1[numItems] = Eigen::Vector2i(u,v);

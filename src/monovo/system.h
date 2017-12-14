@@ -24,19 +24,19 @@ public:
     System(const float* GInv, bool linear = true);
     ~System();
 
-    void AddFrame(ImageAndExposure* p_img, int id);
+    bool AddFrame(ImageAndExposure* p_img, int id);
 
-
-protected:
     enum Status
     {
         NOT_STARTED_YET = -1,
         START_INITIALIZATION = 1,
-        INITIALIZED = 2,
-        ON_TRACK = 3,
-        LOST = 4,
+        INITIALIZED = 3,
+        ON_TRACK = 4,
+        LOST = 5,
     };
 
+
+protected:
 
     void SetGammaFunction(const float* BInv = nullptr);
 
@@ -46,11 +46,16 @@ protected:
         std::unique_lock<std::mutex> lock(mtx_status_);
         status_ = status;
     }
+    inline Status GetStatus()
+    {
+        std::unique_lock<std::mutex> lock(mtx_status_);
+        return status_;
+    }
 
 
 private:
     void Initialize(FrameHessian* p_fh);
-    void Initialize2(FrameHessian* p_fh);
+    void InitializeWithPointsSorted(FrameHessian* p_fh);
 
     void SetPreCalculateValues();
 

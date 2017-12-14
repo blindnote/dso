@@ -138,9 +138,9 @@ include_directories( /usr/local/Cellar/suite-sparse/4.5.4/include/ )
 file(GLOB SUITESPARSE_LIBRARIES_MINE "/usr/local/Cellar/suite-sparse/4.5.4/lib/*" )
 
 # mynteye
-include_directories( /Users/yinr/ComputerVision/SLAM/workspace/MYNT-EYE-SDK/1.x/1.6/mynteye-1.6-mac-x64-opencv-3.2.0/include )
+include_directories( /Users/yinr/ComputerVision/SLAM/workspace/MYNT-EYE-SDK/1.x/1.7/mynteye-1.7-mac-x64-opencv-3.2.0/include )
 file(GLOB MYNTEYE_LIBRARIES_1
-		"/Users/yinr/ComputerVision/SLAM/workspace/MYNT-EYE-SDK/1.x/1.6/mynteye-1.6-mac-x64-opencv-3.2.0/lib/libmynteye_core.dylib")
+		"/Users/yinr/ComputerVision/SLAM/workspace/MYNT-EYE-SDK/1.x/1.7/mynteye-1.7-mac-x64-opencv-3.2.0/lib/libmynteye_core.dylib")
 file(GLOB OPENCV_LIBRARIES_MYNTEYE "/Users/yinr/ComputerVision/SLAM/workspace/opencv/build/lib/*dylib")
 
 

@@ -41,8 +41,17 @@ namespace dso
 PixelSelector::PixelSelector(int w, int h)
 {
 	randomPattern = new unsigned char[w*h];
-	std::srand(3141592);	// want to be deterministic.
-	for(int i=0;i<w*h;i++) randomPattern[i] = rand() & 0xFF;
+//	std::srand(3141592);	// want to be deterministic.
+//	std::ofstream myfile;
+//	myfile.open ("/Users/yinr/Desktop/fixed_pattern.txt");
+	for(int i=0;i<w*h;i++)
+	{
+//		randomPattern[i] = rand() & 0xFF;
+		randomPattern[i] = i & 0xFF;
+//		myfile << (int)randomPattern[i] << ",";
+//		if (i % w == 0) myfile << std::endl;
+	}
+//	myfile.close();
 
 	currentPotential=3;
 

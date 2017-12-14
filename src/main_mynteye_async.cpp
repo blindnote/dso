@@ -63,7 +63,7 @@ int FpsStatus()
 
 Camera* cam = nullptr;
 uint64_t frameID = 0;
-const int64_t MAX_FRAMRES = 1000;
+int64_t MAX_FRAMRES = 2000;
 
 class GrabCallbacks
 {
@@ -145,6 +145,7 @@ void exitThread()
 
 std::string cam_name="1";
 std::string calib = "";
+std::string opencvFile ="";
 std::string vignetteFile = "";
 std::string gammaFile = "";
 float playbackSpeed=0;	// 0 for linearize (play as fast as possible, while sequentializing tracking & mapping). otherwise, factor on timestamps.
@@ -234,6 +235,12 @@ void parse_arguments(char *arg)
         printf("loading calibration from %s!\n", calib.c_str());
         return;
     }
+    if(1==sscanf(arg,"opencv=%s",buf))
+    {
+        opencvFile = buf;
+        printf("loading opencv_calib from %s!\n", opencvFile.c_str());
+        return;
+    }
     if(1==sscanf(arg,"vignette=%s",buf))
     {
         vignetteFile = buf;
@@ -248,13 +255,20 @@ void parse_arguments(char *arg)
         return;
     }
 
-    if(1==sscanf(arg,"nogui=%d",&option))
+    if(1==sscanf(arg,"nomt=%d",&option))
     {
         if(option==1)
         {
-            disableAllDisplay = true;
-            printf("NO GUI!\n");
+            multiThreading = false;
+            printf("NO MultiThreading!\n");
         }
+        return;
+    }
+
+    if(1==sscanf(arg,"max=%d",&option))
+    {
+        MAX_FRAMRES = option;
+        printf("Max Frames -> %d !\n", MAX_FRAMRES);
         return;
     }
 
@@ -290,7 +304,7 @@ void LoadIntrinsics(Undistort* undistorter_ptr)
     return;
 }
 
-
+int first_track_frame = -1;
 
 
 
@@ -309,15 +323,19 @@ int main(int argc, char** argv)
     setting_affineOptModeA = 0; //-1: fix. >=0: optimize (with prior, if > 0).
     setting_affineOptModeB = 0; //-1: fix. >=0: optimize (with prior, if > 0).
 
+//    setting_maxShiftWeightT= 0.04f * (752+480);
+//    setting_maxShiftWeightR= 0.0f * (752+480);
+//    setting_maxShiftWeightRT= 0.02f * (752+480);
 
-    undistorter = Undistort::getUndistorterForFile(calib, gammaFile, vignetteFile);
+
+    undistorter = Undistort::getUndistorterForFile(calib, gammaFile, vignetteFile, opencvFile);
 
     setGlobalCalib(
             (int)undistorter->getSize()[0],
             (int)undistorter->getSize()[1],
             undistorter->getK().cast<float>());
 
-    LoadIntrinsics(undistorter);
+//    LoadIntrinsics(undistorter);
 
 
 
@@ -379,6 +397,10 @@ int main(int argc, char** argv)
 
 
                 if (frameID < 10) continue;
+                else if (frameID == 10) {
+                    first_track_frame = frameID;
+                }
+
 
 
 //                printf("processing ...\n");
@@ -397,7 +419,20 @@ int main(int argc, char** argv)
                 if (fullSystem->initFailed)
                 {
                     printf("Init Failed!!\n");
-                    break;
+
+                    if (frameID - first_track_frame >= 60)
+                        break;
+
+                    printf("Resetting!!\n");
+                    std::vector<IOWrap::Output3DWrapper*> wraps = fullSystem->outputWrapper;
+                    delete fullSystem;
+
+                    for(IOWrap::Output3DWrapper* ow : wraps) ow->reset();
+
+                    fullSystem = new FullSystem();
+                    fullSystem->linearizeOperation = (playbackSpeed==0);
+
+                    fullSystem->outputWrapper = wraps;
                 }
 
                 if(fullSystem->isLost)
@@ -407,7 +442,7 @@ int main(int argc, char** argv)
                 }
 
 
-                if (frameID > 1000 || grab_callbacks.GetCount() > MAX_FRAMRES ) { break; }
+                if (frameID > MAX_FRAMRES || grab_callbacks.GetCount() > MAX_FRAMRES ) { break; }
 
                 char key = (char) cv::waitKey(1);
                 if (key == 27 || key == 'q' || key == 'Q') {  // ESC/Q

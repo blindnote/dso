@@ -73,7 +73,7 @@ std::string calib_file = "";
 std::string vignette_file = "";
 std::string gamma_file = "";
 std::string opencv_yaml = "";
-int start_id = 0;
+int start_id = 1;
 int end_id = 100;
 
 

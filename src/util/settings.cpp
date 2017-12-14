@@ -30,6 +30,7 @@
 namespace dso
 {
 int pyrLevelsUsed = PYR_LEVELS;
+bool plus_dot_five = true;
 
 
 /* Parameters controlling when KF's are taken */

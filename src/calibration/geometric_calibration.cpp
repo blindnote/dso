@@ -179,7 +179,7 @@ ImageAndExposure* GeometricCalibration::UndistortOpencv(const ImageAndExposure* 
         return 0;
     }
 
-    ImageAndExposure* result = new ImageAndExposure(width_, height_, input_image->timestamp);
+    ImageAndExposure* result = new ImageAndExposure(width_, height_, input_image->timestamp, input_image->exposure_time);
 
     if (!passthrough_)
     {

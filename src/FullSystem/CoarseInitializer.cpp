@@ -59,11 +59,13 @@ CoarseInitializer::CoarseInitializer(int ww, int hh) : thisToNext_aff(0,0), this
 
 
 	frameID=-1;
-	fixAffine=true;
+	fixAffine=false;
 	printDebug=false;
 
-	wM.diagonal()[0] = wM.diagonal()[1] = wM.diagonal()[2] = SCALE_XI_ROT;
-	wM.diagonal()[3] = wM.diagonal()[4] = wM.diagonal()[5] = SCALE_XI_TRANS;
+//	wM.diagonal()[0] = wM.diagonal()[1] = wM.diagonal()[2] = SCALE_XI_ROT;
+//	wM.diagonal()[3] = wM.diagonal()[4] = wM.diagonal()[5] = SCALE_XI_TRANS;
+	wM.diagonal()[0] = wM.diagonal()[1] = wM.diagonal()[2] = SCALE_XI_TRANS;
+	wM.diagonal()[3] = wM.diagonal()[4] = wM.diagonal()[5] = SCALE_XI_ROT;
 	wM.diagonal()[6] = SCALE_A;
 	wM.diagonal()[7] = SCALE_B;
 }
@@ -98,7 +100,6 @@ bool CoarseInitializer::trackFrame(FrameHessian* newFrameHessian, std::vector<IO
 	if(!snapped)
 	{
 //		thisToNext.translation().setZero();
-//		thisToNext.setRotationMatrix(Sophus::Matrix<double, 3, 3>());
 		thisToNext = SE3();
 		for(int lvl=0;lvl<pyrLevelsUsed;lvl++)
 		{
@@ -117,8 +118,12 @@ bool CoarseInitializer::trackFrame(FrameHessian* newFrameHessian, std::vector<IO
 	SE3 refToNew_current = thisToNext;
 	AffLight refToNew_aff_current = thisToNext_aff;
 
-	if(firstFrame->ab_exposure>0 && newFrame->ab_exposure>0)
-		refToNew_aff_current = AffLight(logf(newFrame->ab_exposure /  firstFrame->ab_exposure),0); // coarse approximation.
+	if(firstFrame->ab_exposure>0 && newFrame->ab_exposure>0) {
+//		printf("firstFrame->ab_exposure:%.4f, newFrame->ab_exposure:%.4f \n",
+//			   firstFrame->ab_exposure, newFrame->ab_exposure);
+		refToNew_aff_current = AffLight(logf(newFrame->ab_exposure / firstFrame->ab_exposure),
+										0); // coarse approximation.
+	}
 
 
 	Vec3f latestRes = Vec3f::Zero();
@@ -131,6 +136,7 @@ bool CoarseInitializer::trackFrame(FrameHessian* newFrameHessian, std::vector<IO
 			propagateDown(lvl+1);
 
 		Mat88f H,Hsc; Vec8f b,bsc;
+
 		resetPoints(lvl);
 		Vec3f resOld = calcResAndGS(lvl, H, b, Hsc, bsc, refToNew_current, refToNew_aff_current, false);
 		applyStep(lvl);
@@ -213,23 +219,26 @@ bool CoarseInitializer::trackFrame(FrameHessian* newFrameHessian, std::vector<IO
 			if(accept)
 			{
 
-				if(resNew[1] == alphaK*numPoints[lvl])
+				if(resNew[1] == alphaK*numPoints[lvl]) {
+                    if (!snapped)
+                        printf("snapped -> true At level_%d iteration_%d!\n", lvl, iteration);
 					snapped = true;
-				H = H_new;
-				b = b_new;
-				Hsc = Hsc_new;
-				bsc = bsc_new;
-				resOld = resNew;
-				refToNew_aff_current = refToNew_aff_new;
-				refToNew_current = refToNew_new;
-				applyStep(lvl);
-				optReg(lvl);
-				lambda *= 0.5;
-				fails=0;
-				if(lambda < 0.0001) lambda = 0.0001;
-			}
-			else
-			{
+				}
+            H = H_new;
+            b = b_new;
+            Hsc = Hsc_new;
+            bsc = bsc_new;
+            resOld = resNew;
+            refToNew_aff_current = refToNew_aff_new;
+            refToNew_current = refToNew_new;
+            applyStep(lvl);
+            optReg(lvl);
+            lambda *= 0.5;
+            fails=0;
+            if(lambda < 0.0001) lambda = 0.0001;
+        }
+        else
+        {
 				fails++;
 				lambda *= 4;
 				if(lambda > 10000) lambda = 10000;
@@ -242,6 +251,19 @@ bool CoarseInitializer::trackFrame(FrameHessian* newFrameHessian, std::vector<IO
 				Mat88f H,Hsc; Vec8f b,bsc;
 
 				quitOpt = true;
+                if (!(inc.norm() > eps))
+                {
+                    printf("quit level_%d iteration_%d because of !(inc.norm():%.6f > eps:%.6f)\n", lvl, iteration, inc.norm(), eps);
+                }
+                else if (iteration >= maxIterations[lvl])
+                {
+                    printf("quit level_%d iteration_%d because of iteration(%d) >= maxIterations(%d), inc.norm:%.6f\n",
+                           lvl, iteration, iteration, maxIterations[lvl], inc.norm());
+                }
+                else if (fails >= 2)
+                {
+                    printf("quit level_%d iteration_%d because of fails >= 2, inc.norm:%.6f\n", lvl, iteration, inc.norm());
+                }
 			}
 
 
@@ -264,8 +286,9 @@ bool CoarseInitializer::trackFrame(FrameHessian* newFrameHessian, std::vector<IO
 
 
 	frameID++;
+    // snapped变为true之前, snappedAt永远为0
 	if(!snapped) snappedAt=0;
-
+	// snapped第一次为true时, snappedAt被设置为当时的frameID
 	if(snapped && snappedAt==0)
 		snappedAt = frameID;
 
@@ -282,7 +305,7 @@ bool CoarseInitializer::trackFrame(FrameHessian* newFrameHessian, std::vector<IO
 
 void CoarseInitializer::debugPlot(int lvl, std::vector<IOWrap::Output3DWrapper*> &wraps)
 {
-    bool needCall = false;
+    bool needCall = true;
     for(IOWrap::Output3DWrapper* ow : wraps)
         needCall = needCall || ow->needPushDepthImage();
     if(!needCall) return;
@@ -309,6 +332,7 @@ void CoarseInitializer::debugPlot(int lvl, std::vector<IOWrap::Output3DWrapper*>
 			sid += point->iR;
 		}
 	}
+	printf("lvl_%d: good:%.2f\n", lvl, nid);
 	float fac = nid / sid;
 
 
@@ -387,18 +411,39 @@ Vec3f CoarseInitializer::calcResAndGS(
 		// sum over all residuals.
 		bool isGood = true;
 		float energy=0;
+        // Reference: https://zhuanlan.zhihu.com/p/29177540
 		for(int idx=0;idx<patternNum;idx++)
 		{
 			int dx = patternP[idx][0];
 			int dy = patternP[idx][1];
 
 
-			Vec3f pt = RKi * Vec3f(point->u+dx, point->v+dy, 1) + t*point->idepth_new;
-			float u = pt[0] / pt[2];
-			float v = pt[1] / pt[2];
-			float Ku = fxl * u + cxl;
-			float Kv = fyl * v + cyl;
-			float new_idepth = point->idepth_new/pt[2];
+            // 逆深度 ρT = 1/dT, ρH = 1/dH, 像素坐标 xH = (uH, vH, 1.0), xT = (uT, vT, 1.0)t
+            // 令 PT = (XT, YT, ZT)t 为投影点在target相机坐标系中的三维坐标，
+            // i.e. PT = (XT, YT, ZT)t = [ RTH * Ki * (1/ρH) * xH + tTH ]
+            //                         = (1/ρH) * [ RTH * Ki * xH + tTH * ρH ]
+            // and let's make pt = (pt[0], pt[1], pt[2])t = [ RTH * Ki * xH + tTH * ρH ]   ---- ①
+			// pt可以理解为像素xH在host帧中归一化的三维坐标投影到target帧上的三维点
+            // then we get PT = (1/ρH) * pt,
+            // 归一化, PT = (1/ρH) * pt[2] * (pt[0]/pt[2], pt[1]/pt[2], 1.0)t
+            //           = (1/ρH) * pt[2] * (u, v, 1.0)t     ---- ② ③
+            // so (u, v, 1.0) 其实是投影点在target相机坐标系中归一化后的三维坐标
+            //
+            // target帧中投影点的像素齐次坐标:
+            // 		(1/ρT) * (uT, vT, 1.0)t = (1/ρT) * xT = K * [ RTH * Ki * (1/ρH) * xH + tTH ]	 ★★★★★
+            // i.e. (uT, vT, 1.0)t = xT = ρT * K * PT
+            //                          = ρT * K * [ (1/ρH) * pt[2] * (u, v, 1.0)t ]
+            //                          = (ρT/ρH) * pt[2] * K * (u, v, 1.0)t
+            //                          = (ρT/ρH) * pt[2] * (fx * u + cx, fy * v + cy, 1.0)t
+            //                          = (ρT/ρH) * pt[2] * (Ku, Kv, 1.0)t   ---- ④ ⑤
+			// easily derive that 1.0 = (ρT/ρH) * pt[2], hence ρT = ρH / pt[2]		---- ⑥
+            // and uT = Ku, vT = Kv, i.e. Ku, Kv是target帧中投影点的像素坐标
+			Vec3f pt = RKi * Vec3f(point->u+dx, point->v+dy, 1) + t * point->idepth_new;  	// ①
+			float u = pt[0] / pt[2];                                                      	// ②
+			float v = pt[1] / pt[2];                                                      	// ③
+			float Ku = fxl * u + cxl;														// ④
+			float Kv = fyl * v + cyl;														// ⑤
+			float new_idepth = point->idepth_new / pt[2];									// ⑥
 
 			if(!(Ku > 1 && Kv > 1 && Ku < wl-2 && Kv < hl-2 && new_idepth > 0))
 			{
@@ -409,7 +454,7 @@ Vec3f CoarseInitializer::calcResAndGS(
 			Vec3f hitColor = getInterpolatedElement33(colorNew, Ku, Kv, wl);
 			//Vec3f hitColor = getInterpolatedElement33BiCub(colorNew, Ku, Kv, wl);
 
-			//float rlR = colorRef[point->u+dx + (point->v+dy) * wl][0];
+//			float rlR = colorRef[int(point->u+dx + (point->v+dy) * wl)][0];
 			float rlR = getInterpolatedElement31(colorRef, point->u+dx, point->v+dy, wl);
 
 			if(!std::isfinite(rlR) || !std::isfinite((float)hitColor[0]))
@@ -420,30 +465,173 @@ Vec3f CoarseInitializer::calcResAndGS(
 
 
 			float residual = hitColor[0] - r2new_aff[0] * rlR - r2new_aff[1];
+			// Huber norm:
+			// http://sepwww.stanford.edu/public/docs/sep121/paper_html/node12.html#SECTION00220000000000000000
+			// The Huber norm is an hybrid l1^2 / l2^2 error measure that is robust to outliers.
+			//
+			//				/ (r^2)/2				, 0 ≤ |r| ≤ α
+			//		Hα(r) =|
+			//				\ α * (|r| - (α/2))		, |r| > α
+			//
+			// Huber loss: https://en.wikipedia.org/wiki/Huber_loss
+			// This function is quadratic for small values of r, and linear for large values,
+			// Here:
+			//
+			//				/ r^2					, 0 ≤ |r| ≤ α  (since hw = 1)
+			//		Hα(r) =|
+			//				\ 2 * α * (|r| - (α/2))	, |r| > α (since hw = α/|r|)
+			//
 			float hw = fabs(residual) < setting_huberTH ? 1 : setting_huberTH / fabs(residual);
 			energy += hw *residual*residual*(2-hw);
 
 
+            // 残值表达式: r = I(xT) - a * I(xH) - b
+            // Jacobian求解:
+            //   1. 图像雅可比: ∂I(xT)/∂xT
+            //   2. 几何雅可比, 投影像素坐标相对于相机位姿及点的逆深度变化率: ∂xT/∂(δξ), ∂xT/∂ρH
+            //   3. 光度雅可比: ∂r/∂a, ∂r/∂b
+            //
+            // (一) 几何部分
+            // [1] 对逆深度求导 ∂xT/∂ρH
+			//	   上面已经得到 [u, v, 1.0]t 是投影点在target帧中相机坐标系下归一化后的三维坐标
+            //       -  uT -			  -  u  -
+            //      |   vT  | = xT = K * |   v   | = K * (ρT/ρH) * [ RTH * Ki * xH + tTH * ρH ]
+			//		 - 1.0 -			  - 1.0 -   观察到RTH * Ki * xH 项与ρH无关, 令其为常数项C(3x1的列向量)
+			//									   = K * (ρT/ρH) * [ C + tTH * ρH ]
+			//						 	  			   	  - (ρT/ρH) * (C[0] + tTH[0] * ρH) -
+			//									   = K * |  (ρT/ρH) * (C[1] + tTH[1] * ρH)  |
+			//							  	 		      - (ρT/ρH) * (C[2] + tTH[2] * ρH) -
+			//
+			//						 	  			   	  - (ρT/ρH) * (C[0] + tTH[0] * ρH) -
+			//									   = K * |  (ρT/ρH) * (C[1] + tTH[1] * ρH)  |
+			//							  	 		      - 			 1.0		       -
+			//
+            // 有一个未知量ρT需要替换
+            // 由于 第三行 1.0 = (ρT/ρH) * (C[2] + tTH[2] * ρH)
+            // 可得 (ρT/ρH) = (C[2] + tTH[2] * ρH)^(-1)
+            // 因此
+			// 		u = [ (C[2] + tTH[2] * ρH)^(-1) ] * [ C[0] + tTH[0] * ρH ]
+            //      v = [ (C[2] + tTH[2] * ρH)^(-1) ] * [ C[1] + tTH[1] * ρH ]
+			//
+            //  ∂u/∂ρH = (C[2] + tTH[2] * ρH)^(-1) * tTH[0] + (C[0] + tTH[0] * ρH) * [ -tTH[2] * (C[2] + tTH[2] * ρH)^(-2) ]
+            //         = (C[2] + tTH[2] * ρH)^(-1) * [ tTH[0] -  tTH[2] * (C[0] + tTH[0] * ρH) / (C[2] + tTH[2] * ρH) ]
+            //         = (1/pt[2]) * [ tTH[0] - tTH[2] * (pt[0]/pt[2])]
+            //         = (tTH[0] - tTH[2] * u) / pt[2]   ----  ①
+            //  ∂v/∂ρH = (tTH[1] - tTH[2] * v) / pt[2]   ----  ②
+			//
+			//						 -	(∂uT/∂u) * (∂u/∂ρH)	-     - fx*((tTH[0] - tTH[2]*u)/pt[2]) -
+			// 根据链式法则 ∂xT/∂ρH = |  	  					 | = |	 								|	--- ⑭
+			//  					 -	(∂vT/∂v) * (∂v/∂ρH) -     - fy*((tTH[1] - tTH[2]*v)/pt[2]) -
+			//
+			//
+            // [2] 对位姿求导 ∂xT/∂ξ
+            // 根据链式法则 ∂xT/∂(δξ) = (∂xT/∂PT) * (∂PT/∂(δξ))
+            // a. 像素对空间点 ∂xT/∂PT
+            //     -  uT -			    -  u  -     - fx * u + cx -	    - fx * XT/ZT + cx -
+            //    |   vT  | = xT = K * |   v   | = |  fy * v + cy  | = |  fy * YT/ZT + cy  |
+			//	   - 1.0 -			  	- 1.0 - 	-       1.0   -     _ 		1.0 	  -
+            //
+            //              | ∂uT/∂XT   ∂uT/∂YT  ∂uT/∂ZT  |   | fx/ZT     0     -fx*XT/ZT^2 |
+            //    ∂xT/∂PT = |                             | = |                             |
+            //              | ∂vT/∂XT   ∂vT/∂YT  ∂vT/∂ZT  |   |   0     fy/ZT   -fy*YT/ZT^2 |
+            //
+            //
+            // b. 投影点对李代数 ∂PT/∂ρξ                      -   0   -w3   w2  -
+            //    向量 w = [w1, w2, w3]t 的反对称矩阵 [w]x =  |   w3   0    -w1  |
+            //                                              -  -w2   w1    0  -
+            //
+            //                 -                   -        | 1   0   0    0   ZT   -YT |
+            //   ∂PT/∂(δξ) =  |  I3x3      	-[PT]x  |	= 	| 0   1   0  -ZT   0     XT |
+            //                 -                   -3x6     | 0   0   1   YT  -XT    0 |
+            //
+            //   综上, ∂xT/∂(δξ) = (∂xT/∂PT) * (∂PT/∂(δξ))
+            //                    | fx/ZT     0     -fx*XT/ZT^2 |     | 1   0   0   0   ZT   -YT |
+            //                  = |                             |  *  | 0   1   0  -ZT   0    XT |
+            //                    |   0     fy/ZT   -fy*YT/ZT^2 |     | 0   0   1   YT  -XT   0  |
+            //
+            //                    | fx/ZT     0     -fx*XT/ZT^2     -fx*XT*YT/ZT^2     fx*(1+XT^2/ZT^2)   -fx*YT/ZT  |
+            //                  = |                                                                                  |
+            //                    |   0     fy/ZT   -fy*YT/ZT^2    -fy*(1+YT^2/ZT^2)    fy*XT*YT/ZT^2      fy*XT/ZT  |2x6
+            //
+			//                    | fx*ρT     0     -fx*u*ρT     -fx*u*v     	fx*(1+u^2)    -fx*v  |
+			//                  = |                                                                  |
+			//                    |   0     fy*ρT   -fy*v*ρT    -fy*(1+v^2)       fy*u*v      fy*u   |2x6
+			//
+			//
+            // (二) 图像部分
+            // 灰度对像素
+            // ∂I(xT)/∂xT = [ (I(uT+1, vT) - I(uT-1, vT))/2   (I(uT, vT+1) - I(uT, vT-1))/2 ]
+            //            = [ dx, dy ]1x2
+            //
+            // (三) 光度部分
+            // ∂r/∂a = -a * I(xH)    --- ⑪
+            // ∂r/∂b = -1            --- ⑫
+            //
+			//
+            // (四) 总结
+            //      -                                                        -
+            // J = | (∂I(xT)/∂xT) * [ ∂xT/∂(δξ)   ∂xT/∂ρH ]   (∂r/∂a   ∂r/∂b) |
+            //      -                                                        -1x8
+            // 把逆深度项放后面，因为其它项与帧相关，逆深度与点相关
+            //      -                                                                -
+            // J = | ∂I(xT)/∂xT * ∂xT/∂(δξ)     ∂r/∂a   ∂r/∂b   ∂I(xT)/∂xT * ∂xT/∂ρH  |
+            //      - (图像部分) (几何位姿部分)     （光度部分）    (图像部分)(几何深度部分) -1x8
+			//
+			//  						  |  uT  |				    	-  XT / ZT  -			  -  u  -
+			// 其中,  (1/ρT)xT = (1/ρT) * |   vT  | = K * PT = K * ZT * |   YT / ZT  | = K * ZT * |   v  |
+			//                            |  1.0 |                  	-    1.0    -			  - 1.0 -
+			// 可得 1/ZT = ρT, u = XT / ZT, v = YT / ZT
+            // 令中间项 dxInterp = dx*fx , dyInterp = dy*fy  --- ③④
+			//
+            //
+            // 前6项 i.e. ∂I(xT)/∂xT * ∂xT/∂(δξ) =  -          dx*fx*ρT             -      --- ⑤
+            //                                     |          dy*fy*ρT              |     --- ⑥
+            //                                     |    -(dx*fx*u + dy*fy*v)*ρT     |     --- ⑦
+            //                                     |   -dx*fx*u*v - dy*fy*(1+v^2)   |     --- ⑧
+            //                                     |   dx*fx*(1+u^2) + dy*fy*u*v	|     --- ⑨
+            //                                     |   	  -dx*fx*v + dy*fy*u		|     --- ⑩
+            //                                      -                       	   -1x6
+			//
+			//												   | (∂uT/∂v) * (∂u/∂ρH) |
+            // 最后1项 i.e. ∂I(xT)/∂xT * ∂xT/∂ρH = ∂I(xT)/∂xT * | (∂vT/∂v) * (∂v/∂ρH) |
+            //                                               | fx * ((tTH[0] - tTH[2]*u) / pt[2]) |
+            //                                   = [dx dy] * |  			   			 	      |		--- ⑬
+            //                                               | fy * ((tTH[1] - tTH[2]*v) / pt[2]) |
+			//
+			//
+            float dxdd = (t[0]-t[2]*u)/pt[2];       			// ①
+			float dydd = (t[1]-t[2]*v)/pt[2];       			// ②
 
+            // Robust Estimation using M-estimation via Iteratively reweighted least squares(IRLS)
+            // https://www.sebastiansylvan.com/post/robustestimation/
+            //
+            //
+			if(hw < 1) hw = sqrtf(2.0 * hw);							//
 
-			float dxdd = (t[0]-t[2]*u)/pt[2];
-			float dydd = (t[1]-t[2]*v)/pt[2];
-
-			if(hw < 1) hw = sqrtf(hw);
-			float dxInterp = hw*hitColor[1]*fxl;
-			float dyInterp = hw*hitColor[2]*fyl;
-			dp0[idx] = new_idepth*dxInterp;
-			dp1[idx] = new_idepth*dyInterp;
-			dp2[idx] = -new_idepth*(u*dxInterp + v*dyInterp);
-			dp3[idx] = -u*v*dxInterp - (1+v*v)*dyInterp;
-			dp4[idx] = (1+u*u)*dxInterp + u*v*dyInterp;
-			dp5[idx] = -v*dxInterp + u*dyInterp;
-			dp6[idx] = - hw*r2new_aff[0] * rlR;
-			dp7[idx] = - hw*1;
-			dd[idx] = dxInterp * dxdd  + dyInterp * dydd;
+			float dxInterp = hw*hitColor[1]*fxl;    			// ③
+			float dyInterp = hw*hitColor[2]*fyl;    			// ④
+			dp0[idx] = new_idepth*dxInterp;						// ⑤
+			dp1[idx] = new_idepth*dyInterp;						// ⑥
+			dp2[idx] = -new_idepth*(u*dxInterp + v*dyInterp);	// ⑦
+			dp3[idx] = -u*v*dxInterp - (1+v*v)*dyInterp;		// ⑧
+			dp4[idx] = (1+u*u)*dxInterp + u*v*dyInterp;			// ⑨
+			dp5[idx] = -v*dxInterp + u*dyInterp;                // ⑩
+			dp6[idx] = - hw*r2new_aff[0] * rlR;                 // ⑪
+			dp7[idx] = - hw*1;                                  // ⑫
+			dd[idx] = dxInterp * dxdd  + dyInterp * dydd;		// ⑬
 			r[idx] = hw*residual;
 
-			float maxstep = 1.0f / Vec2f(dxdd*fxl, dydd*fyl).norm();
+			//  - dxdd*fxl -     - (∂uT/∂u) * (∂u/∂ρH) -                    令 - a -
+			// |  			| = |					    | = ∂xT/∂PT = Vec2f = |     |
+			//  - dydd*fxy -	 - (∂vT/∂v) * (∂v/∂ρH) -                       - b -
+			//
+			// 这里Vec2f代表的物理意义是: 投影的像素点位置如何随逆深度值的变化而变化
+			// i.e. 若逆深度变化ΔρH, 则target帧上投影点像素坐标横、纵坐标分别变化: (a*ΔρH, b*ΔρH)
+			// 由于前面计算像素梯度时, dx dy都跨越了2个像素范围
+            // 因此 [(a*ΔρH)^2 + (b*ΔρH)^2]max = 2^2 + 2^2 = 8
+            // i.e. (ΔρH)max = sqrt[8/(a^2 + b^2)]    	--- ⑭
+//			float maxstep = 1.0f / Vec2f(dxdd*fxl, dydd*fyl).norm();   // ⑭
+            float maxstep = sqrt(8.0) / Vec2f(dxdd*fxl, dydd*fyl).norm();   // ⑭
 			if(maxstep < point->maxstep) point->maxstep = maxstep;
 
 			// immediately compute dp*dd' and dd*dd' in JbBuffer1.
@@ -486,13 +674,12 @@ Vec3f CoarseInitializer::calcResAndGS(
 					_mm_load_ps(((float*)(&dp7))+i),
 					_mm_load_ps(((float*)(&r))+i));
 
-
-		for(int i=((patternNum>>2)<<2); i < patternNum; i++)
-			acc9.updateSingle(
-					(float)dp0[i],(float)dp1[i],(float)dp2[i],(float)dp3[i],
-					(float)dp4[i],(float)dp5[i],(float)dp6[i],(float)dp7[i],
-					(float)r[i]);
-
+        // no use at all
+//		for(int i=((patternNum>>2)<<2); i < patternNum; i++)
+//            acc9.updateSingle(
+//                    (float) dp0[i], (float) dp1[i], (float) dp2[i], (float) dp3[i],
+//                    (float) dp4[i], (float) dp5[i], (float) dp6[i], (float) dp7[i],
+//                    (float) r[i]);
 
 	}
 
@@ -523,7 +710,7 @@ Vec3f CoarseInitializer::calcResAndGS(
 	EAlpha.finish();
 	float alphaEnergy = alphaW*(EAlpha.A + refToNew.translation().squaredNorm() * npts);
 
-	//printf("AE = %f * %f + %f\n", alphaW, EAlpha.A, refToNew.translation().squaredNorm() * npts);
+//	printf("AE = %f * %f + %f\n", alphaW, EAlpha.A, refToNew.translation().squaredNorm() * npts);
 
 
 	// compute alpha opt.
@@ -537,6 +724,7 @@ Vec3f CoarseInitializer::calcResAndGS(
 	{
 		alphaOpt = alphaW;
 	}
+//    printf("alphaOpt:%.2f, alphaEnergy:%.2f\n", alphaOpt, alphaEnergy);
 
 
 	acc9SC.initialize();
@@ -548,16 +736,18 @@ Vec3f CoarseInitializer::calcResAndGS(
 
 		point->lastHessian_new = JbBuffer_new[i][9];
 
-		JbBuffer_new[i][8] += alphaOpt*(point->idepth_new - 1);
+		JbBuffer_new[i][8] += alphaOpt*(point->idepth - 1);
 		JbBuffer_new[i][9] += alphaOpt;
+
 
 		if(alphaOpt==0)
 		{
-			JbBuffer_new[i][8] += couplingWeight*(point->idepth_new - point->iR);
+			JbBuffer_new[i][8] += couplingWeight*(point->idepth - point->iR);
 			JbBuffer_new[i][9] += couplingWeight;
 		}
 
-		JbBuffer_new[i][9] = 1/(1+JbBuffer_new[i][9]);
+         JbBuffer_new[i][9] = 1/(1 + JbBuffer_new[i][9]);
+//		JbBuffer_new[i][9] = 1/(JbBuffer_new[i][9]);
 		acc9SC.updateSingleWeighted(
 				(float)JbBuffer_new[i][0],(float)JbBuffer_new[i][1],(float)JbBuffer_new[i][2],(float)JbBuffer_new[i][3],
 				(float)JbBuffer_new[i][4],(float)JbBuffer_new[i][5],(float)JbBuffer_new[i][6],(float)JbBuffer_new[i][7],
@@ -578,6 +768,7 @@ Vec3f CoarseInitializer::calcResAndGS(
 	H_out(1,1) += alphaOpt*npts;
 	H_out(2,2) += alphaOpt*npts;
 
+    //Sophus: 平移在前，旋转在后
 	Vec3f tlog = refToNew.log().head<3>().cast<float>();
 	b_out[0] += tlog[0]*alphaOpt*npts;
 	b_out[1] += tlog[1]*alphaOpt*npts;
@@ -616,6 +807,7 @@ float CoarseInitializer::rescale()
 Vec3f CoarseInitializer::calcEC(int lvl)
 {
 	if(!snapped) return Vec3f(0,0,numPoints[lvl]);
+    
 	AccumulatorX<2> E;
 	E.initialize();
 	int npts = numPoints[lvl];
@@ -828,7 +1020,7 @@ void CoarseInitializer::setFirst(	CalibHessian* HCalib, FrameHessian* newFrameHe
 
 //				float gth = setting_outlierTH * (sqrtf(sumGrad2)+setting_outlierTHSumComponent);
 //				pl[nl].outlierTH = patternNum*gth*gth;
-//
+
 
 				pl[nl].outlierTH = patternNum*setting_outlierTH;
 
@@ -836,11 +1028,12 @@ void CoarseInitializer::setFirst(	CalibHessian* HCalib, FrameHessian* newFrameHe
 
 				nl++;
 				assert(nl <= npts);
-			}
+		}
 		}
 
 
 		numPoints[lvl]=nl;
+		printf("level[%d] %d\n", lvl, nl);
 	}
 	delete[] statusMap;
 	delete[] statusMapB;
@@ -851,8 +1044,8 @@ void CoarseInitializer::setFirst(	CalibHessian* HCalib, FrameHessian* newFrameHe
 	snapped = false;
 	frameID = snappedAt = 0;
 
-	for(int i=0;i<pyrLevelsUsed;i++)
-		dGrads[i].setZero();
+//	for(int i=0;i<pyrLevelsUsed;i++)
+//		dGrads[i].setZero();
 
 }
 
@@ -948,8 +1141,16 @@ void CoarseInitializer::makeK(CalibHessian* HCalib)
 		h[level] = h[0] >> level;
 		fx[level] = fx[level-1] * 0.5;
 		fy[level] = fy[level-1] * 0.5;
-		cx[level] = (cx[0] + 0.5) / ((int)1<<level) - 0.5;
-		cy[level] = (cy[0] + 0.5) / ((int)1<<level) - 0.5;
+        if (plus_dot_five)
+        {
+            cx[level] = (cx[0] + 0.5) / ((int) 1 << level) - 0.5;
+            cy[level] = (cy[0] + 0.5) / ((int) 1 << level) - 0.5;
+        }
+        else
+        {
+            cx[level] = cx[0] / ((int) 1 << level);
+            cy[level] = cy[0] / ((int) 1 << level);
+        }
 	}
 
 	for (int level = 0; level < pyrLevelsUsed; ++ level)
@@ -1102,6 +1303,8 @@ void CoarseInitializer::DislayChosenPoints(int lvl, std::vector<int>& indexes)
 
 	int npts = numPoints[lvl];
 
+	float max_iR = -1;
+	float min_iR = std::numeric_limits<float>::max();
 	float nid = 0, sid=0;
 	for(int i=0;i<npts;i++)
 	{
@@ -1110,12 +1313,25 @@ void CoarseInitializer::DislayChosenPoints(int lvl, std::vector<int>& indexes)
 		{
 			nid++;
 			sid += point->iR;
+
+			if (std::find(indexes.begin(), indexes.end(), i) != indexes.end())
+			{
+				if (point->idepth > max_iR)
+				{
+					max_iR = point->idepth;
+				}
+				if (point->idepth < min_iR)
+				{
+					min_iR = point->idepth;
+				}
+			}
 		}
 	}
 	float fac = nid / sid;
 
 
-
+//	float GAP = max_iR - min_iR;
+	float GAP = 1/min_iR - 1/max_iR;
 	for(int i=0;i<indexes.size();i++)
 	{
 		int idx = indexes[i];
@@ -1128,6 +1344,10 @@ void CoarseInitializer::DislayChosenPoints(int lvl, std::vector<int>& indexes)
 //        else
 			iRImg.setPixel9(point->u+0.5f,point->v+0.5f,makeRainbow3B(point->iR*fac));
 
+//		unsigned char value = uchar(point->iR / GAP * 255.0);
+//		unsigned char value = uchar(1/point->idepth / GAP * 255.0);
+//		unsigned char value = uchar( i / indexes.size() * 255.0);
+//		iRImg.setPixel9(point->u+0.5f,point->v+0.5f, Vec3b(value, value, value));
 	}
 
 	IOWrap::displayImage("idepth-R", &iRImg, false);

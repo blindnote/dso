@@ -45,9 +45,7 @@ int main( int argc, char** argv )
     setGlobalCalib(output_w, output_h, geo_calib.GetOptimalK().cast<float>());
 
 
-
     shared_ptr<System> sp_system = std::make_shared<System>(photo_calib.GetGammaInv(), playbackSpeed == 0.0);
-
 
 
     ImagesReader reader(images_path, w, h);
@@ -92,9 +90,10 @@ int main( int argc, char** argv )
         }
 
 
-        sp_system->AddFrame(undistort_opencv_img, id);
+        bool good = sp_system->AddFrame(undistort_opencv_img, id);
+        if (!good) break;
 
-        // cv::waitKey(0);
+//        cv::waitKey(0);
 
         delete undistort_opencv_img;
         delete corrected_image;

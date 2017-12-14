@@ -91,8 +91,16 @@ namespace dso
 
 			fxG[level] = fxG[level-1] * 0.5;
 			fyG[level] = fyG[level-1] * 0.5;
-			cxG[level] = (cxG[0] + 0.5) / ((int)1<<level) - 0.5;
-			cyG[level] = (cyG[0] + 0.5) / ((int)1<<level) - 0.5;
+			if (plus_dot_five)
+			{
+				cxG[level] = (cxG[0] + 0.5) / ((int) 1 << level) - 0.5;
+				cyG[level] = (cyG[0] + 0.5) / ((int) 1 << level) - 0.5;
+			}
+			else
+			{
+				cxG[level] = cxG[0] / ((int) 1 << level);
+				cyG[level] = cyG[0] / ((int) 1 << level);
+			}
 
 			KG[level]  << fxG[level], 0.0, cxG[level], 0.0, fyG[level], cyG[level], 0.0, 0.0, 1.0;	// synthetic
 			KiG[level] = KG[level].inverse();

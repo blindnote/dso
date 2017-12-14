@@ -312,7 +312,8 @@ Vec4 FullSystem::trackNewCoarse(FrameHessian* fh)
 		// just try a TON of different initializations (all rotations). In the end,
 		// if they don't work they will only be tried on the coarsest level, which is super fast anyway.
 		// also, if tracking rails here we loose, so we really, really want to avoid that.
-		for(float rotDelta=0.02; rotDelta < 0.05; rotDelta+=0.01)
+        for(float rotDelta=0.02; rotDelta < 0.06; rotDelta+=0.01)
+////		for(float rotDelta=0.02; rotDelta < 0.05; rotDelta+=0.01)
 		{
 			lastF_2_fh_tries.push_back(fh_2_slast.inverse() * lastF_2_slast * SE3(Sophus::Quaterniond(1,rotDelta,0,0), Vec3(0,0,0)));			// assume constant motion.
 			lastF_2_fh_tries.push_back(fh_2_slast.inverse() * lastF_2_slast * SE3(Sophus::Quaterniond(1,0,rotDelta,0), Vec3(0,0,0)));			// assume constant motion.
@@ -820,6 +821,17 @@ void FullSystem::addActiveFrame( ImageAndExposure* image, int id )
 
 	// =========================== make Images / derivatives etc. =========================
 	fh->ab_exposure = image->exposure_time;
+//	if (id == 1)
+//	{
+//		std::ofstream myfile;
+//		float *color = image->image;
+//		myfile.open("/Users/yinr/Desktop/orig_processed_float_img.txt");
+//		for (int i = 0; i < image->w * image->h; i++) {
+//			myfile << "[" << i << "]" << std::setprecision(8) << color[i] << ",";
+//			if ((i + 1) % image->w == 0) myfile << std::endl;
+//		}
+//		myfile.close();
+//	}
     fh->makeImages(image->image, &Hcalib);
 
 
@@ -836,8 +848,16 @@ void FullSystem::addActiveFrame( ImageAndExposure* image, int id )
 		else if(coarseInitializer->trackFrame(fh, outputWrapper))	// if SNAPPED
 		{
 //			initializeFromInitializer(fh);
-			initializeFromPointsWithSortedEnergy(fh);
+			bool has_good = initializeFromPointsWithSortedEnergy(fh);
 			lock.unlock();
+
+            if (!has_good)
+            {
+                printf("Initialize failed for NO good points!\n");
+                initFailed=true;
+                return;
+            }
+
 			deliverTrackedFrame(fh, true);
 		}
 		else
@@ -1104,6 +1124,7 @@ void FullSystem::makeKeyFrame( FrameHessian* fh)
 
 
 	// =========================== Figure Out if INITIALIZATION FAILED =========================
+
 	if(allKeyFramesHistory.size() <= 4)
 	{
 		if(allKeyFramesHistory.size()==2 && rmse > 20*benchmark_initializerSlackFactor)
@@ -1111,18 +1132,21 @@ void FullSystem::makeKeyFrame( FrameHessian* fh)
 			printf("I THINK INITIALIZATINO FAILED! Resetting.[2]rmse:%.8f\n", rmse);
 			initFailed=true;
 		}
-		if(allKeyFramesHistory.size()==3 && rmse > 13*benchmark_initializerSlackFactor)
+		else if(allKeyFramesHistory.size()==3 && rmse > 13*benchmark_initializerSlackFactor)
 		{
 			printf("I THINK INITIALIZATINO FAILED! Resetting.[3]rmse:%.8f\n", rmse);
 			initFailed=true;
 		}
-		if(allKeyFramesHistory.size()==4 && rmse > 9*benchmark_initializerSlackFactor)
+		else if(allKeyFramesHistory.size()==4 && rmse > 9*benchmark_initializerSlackFactor)
 		{
 			printf("I THINK INITIALIZATINO FAILED! Resetting.[4]rmse:%.8f\n", rmse);
 			initFailed=true;
 		}
+		else
+		{
+			printf("I THINK INITIALIZATION SUCCEED! [%u]rmse:%.8f\n", allKeyFramesHistory.size(), rmse);
+		}
 	}
-
 
 
     if(isLost) return;
@@ -1232,7 +1256,7 @@ void FullSystem::initializeFromInitializer(FrameHessian* newFrame)
         printf("Initialization: keep %.1f%% (need %d, have %d)!\n", 100*keepPercentage,
                 (int)(setting_desiredPointDensity), coarseInitializer->numPoints[0] );
 
-
+	int bad_chosen_count = 0;
 	for(int i=0;i<coarseInitializer->numPoints[0];i++)
 	{
 		if(rand()/(float)RAND_MAX > keepPercentage) continue;
@@ -1245,6 +1269,8 @@ void FullSystem::initializeFromInitializer(FrameHessian* newFrame)
 		PointHessian* ph = new PointHessian(pt, &Hcalib);
 		delete pt;
 		if(!std::isfinite(ph->energyTH)) {delete ph; continue;}
+
+		if (!point->isGood) bad_chosen_count++;
 
 		ph->setIdepthScaled(point->iR*rescaleFactor);
 		ph->setIdepthZero(ph->idepth);
@@ -1279,12 +1305,16 @@ void FullSystem::initializeFromInitializer(FrameHessian* newFrame)
 	}
 
 	initialized=true;
-	printf("INITIALIZE FROM INITIALIZER (%d pts)!\n", (int)firstFrame->pointHessians.size());
+//	printf("INITIALIZE FROM INITIALIZER (%d pts)!\n", (int)firstFrame->pointHessians.size());
+	printf("INITIALIZE FROM INITIALIZER (%d pts: good:%d, bad:%d)!\n",
+		   (int)firstFrame->pointHessians.size(),
+		   (int)firstFrame->pointHessians.size() - bad_chosen_count,
+		   bad_chosen_count);
 }
 
 
 
-void FullSystem::initializeFromPointsWithSortedEnergy(FrameHessian* newFrame)
+bool FullSystem::initializeFromPointsWithSortedEnergy(FrameHessian* newFrame)
 {
 	boost::unique_lock<boost::mutex> lock(mapMutex);
 
@@ -1314,17 +1344,18 @@ void FullSystem::initializeFromPointsWithSortedEnergy(FrameHessian* newFrame)
 	float rescaleFactor = 1 / (sumID / numID);
 
 	// randomly sub-select the points I need.
-//	float keepPercentage = setting_desiredPointDensity / coarseInitializer->numPoints[0];
+	float keepPercentage = setting_desiredPointDensity / coarseInitializer->numPoints[0];
 //
 //    if(!setting_debugout_runquiet)
-//        printf("Initialization: keep %.1f%% (need %d, have %d)!\n", 100*keepPercentage,
-//                (int)(setting_desiredPointDensity), coarseInitializer->numPoints[0] );
+        printf("Initialization: keep %.1f%% (need %d, have %d)!\n", 100*keepPercentage,
+                (int)(setting_desiredPointDensity), coarseInitializer->numPoints[0] );
 
 	/////////////////////////////////////////////////////////////////
 	struct tmpPnt
 	{
-		tmpPnt(float U, float V, float type, float ir, float energy, int idx)
+		tmpPnt(bool quality, float U, float V, float type, float ir, float energy, int idx)
 		{
+			good = quality;
 			u = U;
 			v = V;
 			my_type = type;
@@ -1332,6 +1363,7 @@ void FullSystem::initializeFromPointsWithSortedEnergy(FrameHessian* newFrame)
 			energy0 = energy;
 			index = idx;
 		}
+		bool good;
 		float u, v;
 		float my_type;
 		float iR;
@@ -1343,19 +1375,37 @@ void FullSystem::initializeFromPointsWithSortedEnergy(FrameHessian* newFrame)
 			return energy0 < p.energy0;
 		}
 	};
-	std::vector<tmpPnt> points;
+	std::vector<tmpPnt> points, bad_points;
 	for(int i = 0; i < coarseInitializer->numPoints[0]; i++)
 	{
 		Pnt* point = coarseInitializer->points[0]+i;
 		if (point->isGood)
-			points.push_back(tmpPnt(point->u, point->v,
+			points.push_back(tmpPnt(point->isGood,
+									point->u, point->v,
 									point->my_type, point->iR,
 									point->energy[0], i));
+		else
+			bad_points.push_back(tmpPnt(point->isGood,
+									point->u, point->v,
+									point->my_type, point->iR,
+									point->energy[0], i));
+
 	}
 	std::sort(points.begin(), points.end());
+//    std::sort(bad_points.begin(), bad_points.end());
+	printf("good: %d\n", points.size());
+
+    if (points.size() == 0)
+    {
+        printf("Unbelievable: None good points!!\n");
+        return false;
+    }
+
+	points.insert(std::end(points), std::begin(bad_points), std::end(bad_points));
 
 
 	int chosen_count = 0;
+	int bad_chosen_count = 0;
 	std::vector<int> indexes;
 	for (int i = 0; i < points.size() && chosen_count <= setting_desiredPointDensity; i++)
 //	for(int i=0;i<coarseInitializer->numPoints[0];i++)
@@ -1365,6 +1415,11 @@ void FullSystem::initializeFromPointsWithSortedEnergy(FrameHessian* newFrame)
 //		Pnt* point = coarseInitializer->points[0]+i;
 //		ImmaturePoint* pt = new ImmaturePoint(point->u+0.5f,point->v+0.5f,firstFrame,point->my_type, &Hcalib);
 		tmpPnt point = points[i];
+
+//        if (!point.good && rand()/(float)RAND_MAX > keepPercentage) continue;
+        if (!point.good) continue;
+//        if (!point.good && chosen_count > 0.6 * setting_desiredPointDensity) continue;
+
 		ImmaturePoint* pt = new ImmaturePoint(point.u+0.5f, point.v+0.5f, firstFrame, point.my_type, &Hcalib);
 
 		if(!std::isfinite(pt->energyTH)) { delete pt; continue; }
@@ -1376,6 +1431,7 @@ void FullSystem::initializeFromPointsWithSortedEnergy(FrameHessian* newFrame)
 		if(!std::isfinite(ph->energyTH)) {delete ph; continue;}
 
 		chosen_count++;
+		if (!point.good) bad_chosen_count++;
 
 //		ph->setIdepthScaled(point->iR*rescaleFactor);
 		ph->setIdepthScaled(point.iR*rescaleFactor);
@@ -1411,7 +1467,13 @@ void FullSystem::initializeFromPointsWithSortedEnergy(FrameHessian* newFrame)
 	}
 
 	initialized=true;
-	printf("INITIALIZE FROM INITIALIZER (%d pts)!\n", (int)firstFrame->pointHessians.size());
+//	printf("INITIALIZE FROM INITIALIZER (%d pts)!\n", (int)firstFrame->pointHessians.size());
+	printf("INITIALIZE FROM INITIALIZER (%d pts: good:%d, bad:%d)!\n",
+		   (int)firstFrame->pointHessians.size(),
+		   (int)firstFrame->pointHessians.size() - bad_chosen_count,
+		   bad_chosen_count);
+
+    return true;
 }
 
 
