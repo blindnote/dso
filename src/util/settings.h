@@ -127,6 +127,7 @@ extern bool setting_forceAceptStep;
 
 
 extern float setting_huberTH;
+extern float setting_hw_multiplier;
 
 
 extern bool setting_logStuff;

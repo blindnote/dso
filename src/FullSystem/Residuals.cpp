@@ -209,7 +209,7 @@ double PointFrameResidual::linearize(CalibHessian* HCalib)
 		energyLeft += w*w*hw *residual*residual*(2-hw);
 
 		{
-			if(hw < 1) hw = sqrtf(hw);
+			if(hw < 1) hw = sqrtf(setting_hw_multiplier*hw);
 			hw = hw*w;
 
 			hitColor[1]*=hw;

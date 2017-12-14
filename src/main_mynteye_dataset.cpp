@@ -240,9 +240,6 @@ void parse_argument(char* arg)
             setting_affineOptModeA = 0; //-1: fix. >=0: optimize (with prior, if > 0).
             setting_affineOptModeB = 0; //-1: fix. >=0: optimize (with prior, if > 0).
 //
-            setting_maxShiftWeightT= 0.04f * (752+480);
-            setting_maxShiftWeightR= 0.0f * (752+480);
-            setting_maxShiftWeightRT= 0.02f * (752+480);
         }
         if(option==2)
         {
@@ -275,6 +272,13 @@ int main( int argc, char** argv )
     // hook crtl+C.
     boost::thread exThread = boost::thread(exitThread);
 
+    setting_photometricCalibration = 0;
+    setting_affineOptModeA = 0; //-1: fix. >=0: optimize (with prior, if > 0).
+    setting_affineOptModeB = 0; //-1: fix. >=0: optimize (with prior, if > 0).
+
+    setting_maxShiftWeightT= 0.04f * (752+480);
+    setting_maxShiftWeightR= 0.0f * (752+480);
+    setting_maxShiftWeightRT= 0.02f * (752+480);
 
     ImageFolderReader* reader = new ImageFolderReader(source, calib, gamma_calib, vignette, opencv_calib);
     reader->setGlobalCalibration();

@@ -317,8 +317,8 @@ ImmaturePointStatus ImmaturePoint::traceOn(FrameHessian* frame,const Mat33f &hos
 			float dResdDist = dx*hitColor[1] + dy*hitColor[2];
 			float hw = fabs(residual) < setting_huberTH ? 1 : setting_huberTH / fabs(residual);
 
-			H += hw*dResdDist*dResdDist;
-			b += hw*residual*dResdDist;
+			H += setting_hw_multiplier*hw*dResdDist*dResdDist;
+			b += setting_hw_multiplier*hw*residual*dResdDist;
 			energy += weights[idx]*weights[idx]*hw *residual*residual*(2-hw);
 		}
 
@@ -521,7 +521,7 @@ double ImmaturePoint::linearizeResidual(
 		float dyInterp = hitColor[2]*HCalib->fyl();
 		float d_idepth = derive_idepth(PRE_tTll, u, v, dx, dy, dxInterp, dyInterp, drescale);
 
-		hw *= weights[idx]*weights[idx];
+		hw *= setting_hw_multiplier*weights[idx]*weights[idx];
 
 		Hdd += (hw*d_idepth)*d_idepth;
 		bd += (hw*residual)*d_idepth;

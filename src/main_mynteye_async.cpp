@@ -323,9 +323,9 @@ int main(int argc, char** argv)
     setting_affineOptModeA = 0; //-1: fix. >=0: optimize (with prior, if > 0).
     setting_affineOptModeB = 0; //-1: fix. >=0: optimize (with prior, if > 0).
 
-//    setting_maxShiftWeightT= 0.04f * (752+480);
-//    setting_maxShiftWeightR= 0.0f * (752+480);
-//    setting_maxShiftWeightRT= 0.02f * (752+480);
+    setting_maxShiftWeightT= 0.04f * (752+480);
+    setting_maxShiftWeightR= 0.0f * (752+480);
+    setting_maxShiftWeightRT= 0.02f * (752+480);
 
 
     undistorter = Undistort::getUndistorterForFile(calib, gammaFile, vignetteFile, opencvFile);
