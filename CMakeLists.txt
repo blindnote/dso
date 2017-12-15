@@ -160,6 +160,11 @@ if (OpenCV_FOUND AND Pangolin_FOUND)
 	add_executable(mynteye_dataset ${PROJECT_SOURCE_DIR}/src/main_mynteye_dataset.cpp)
 	target_link_libraries(mynteye_dataset dso ${BOOST_LIBRARIES_MINE} ${SUITESPARSE_LIBRARIES_MINE} ${LIBZIP_LIBRARY} ${Pangolin_LIBRARIES} ${OPENCV_LIBRARIES_MYNTEYE} ${MYNTEYE_LIBRARIES_1})
 
+	add_executable(mynteye_recorder ${PROJECT_SOURCE_DIR}/src/main_mynteye_recorder.cpp)
+	target_link_libraries(mynteye_recorder ${BOOST_LIBRARIES_MINE} ${OPENCV_LIBRARIES_MYNTEYE} ${MYNTEYE_LIBRARIES_1})
+
+	add_executable(mynteye_async_recorder ${PROJECT_SOURCE_DIR}/src/main_mynteye_async_recorder.cpp)
+	target_link_libraries(mynteye_async_recorder ${BOOST_LIBRARIES_MINE} ${OPENCV_LIBRARIES_MYNTEYE} ${MYNTEYE_LIBRARIES_1})
 
 	add_executable(breakdown_initializer ${PROJECT_SOURCE_DIR}/src/main_breakdown_initializer.cpp)
 	target_link_libraries(breakdown_initializer dso ${BOOST_LIBRARIES_MINE} ${SUITESPARSE_LIBRARIES_MINE} ${LIBZIP_LIBRARY} ${Pangolin_LIBRARIES} ${OPENCV_LIBRARIES_MYNTEYE} ${MYNTEYE_LIBRARIES_1})

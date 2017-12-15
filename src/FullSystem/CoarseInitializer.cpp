@@ -571,9 +571,9 @@ namespace dso {
                 float dydd = (t[1] - t[2] * v) / pt[2];                // ②
 
                 // Robust Estimation using M-estimation via Iteratively reweighted least squares(IRLS)
+                // https://en.wikipedia.org/wiki/Iteratively_reweighted_least_squares
+                // http://users.stat.umn.edu/~sandy/courses/8053/handouts/robust.pdf
                 // https://www.sebastiansylvan.com/post/robustestimation/
-                //
-                //
                 if (hw < 1) hw = sqrtf(setting_hw_multiplier * hw);                            //
 
                 float dxInterp = hw * hitColor[1] * fxl;                // ③
@@ -599,7 +599,7 @@ namespace dso {
                 // 因此 [(a*ΔρH)^2 + (b*ΔρH)^2]max = 2^2 + 2^2 = 8
                 // i.e. (ΔρH)max = sqrt[8/(a^2 + b^2)]    	--- ⑭
 //			float maxstep = 1.0f / Vec2f(dxdd*fxl, dydd*fyl).norm();   // ⑭
-                float maxstep = sqrt(8.0) / Vec2f(dxdd * fxl, dydd * fyl).norm();   // ⑭
+                float maxstep = sqrtf(8.0) / Vec2f(dxdd * fxl, dydd * fyl).norm();   // ⑭
                 if (maxstep < point->maxstep) point->maxstep = maxstep;
 
                 // immediately compute dp*dd' and dd*dd' in JbBuffer1.
