@@ -95,7 +95,8 @@ void PangolinDSOViewer::run()
 		);
 
 	pangolin::View& Visualization3D_display = pangolin::CreateDisplay()
-		.SetBounds(0.0, 1.0, pangolin::Attach::Pix(UI_WIDTH), 1.0, -w/(float)h)
+//		.SetBounds(0.0, 1.0, pangolin::Attach::Pix(UI_WIDTH), 1.0, -w/(float)h)
+		.SetBounds(0.0, 1.0, 0.0, 1.0, -w/(float)h)
 		.SetHandler(new pangolin::Handler3D(Visualization3D_camera));
 
 
@@ -103,26 +104,28 @@ void PangolinDSOViewer::run()
 	pangolin::View& d_kfDepth = pangolin::Display("imgKFDepth")
 	    .SetAspect(w/(float)h);
 
-	pangolin::View& d_video = pangolin::Display("imgVideo")
-	    .SetAspect(w/(float)h);
-
-	pangolin::View& d_residual = pangolin::Display("imgResidual")
-	    .SetAspect(w/(float)h);
+//	pangolin::View& d_video = pangolin::Display("imgVideo")
+//	    .SetAspect(w/(float)h);
+//
+//	pangolin::View& d_residual = pangolin::Display("imgResidual")
+//	    .SetAspect(w/(float)h);
 
 	pangolin::GlTexture texKFDepth(w,h,GL_RGB,false,0,GL_RGB,GL_UNSIGNED_BYTE);
-	pangolin::GlTexture texVideo(w,h,GL_RGB,false,0,GL_RGB,GL_UNSIGNED_BYTE);
-	pangolin::GlTexture texResidual(w,h,GL_RGB,false,0,GL_RGB,GL_UNSIGNED_BYTE);
+//	pangolin::GlTexture texVideo(w,h,GL_RGB,false,0,GL_RGB,GL_UNSIGNED_BYTE);
+//	pangolin::GlTexture texResidual(w,h,GL_RGB,false,0,GL_RGB,GL_UNSIGNED_BYTE);
 
 
     pangolin::CreateDisplay()
-		  .SetBounds(0.0, 0.3, pangolin::Attach::Pix(UI_WIDTH), 1.0)
+//		  .SetBounds(0.0, 0.3, pangolin::Attach::Pix(UI_WIDTH), 1.0)
+          .SetBounds(0.0, 0.3, 0.0, 1.0)
 		  .SetLayout(pangolin::LayoutEqual)
-		  .AddDisplay(d_kfDepth)
-		  .AddDisplay(d_video)
-		  .AddDisplay(d_residual);
+		  .AddDisplay(d_kfDepth);
+//		  .AddDisplay(d_video)
+//		  .AddDisplay(d_residual);
 
 	// parameter reconfigure gui
-	pangolin::CreatePanel("ui").SetBounds(0.0, 1.0, 0.0, pangolin::Attach::Pix(UI_WIDTH));
+
+//	pangolin::CreatePanel("ui").SetBounds(0.0, 1.0, 0.0, pangolin::Attach::Pix(UI_WIDTH));
 
 	pangolin::Var<int> settings_pointCloudMode("ui.PC_mode",1,1,4,false);
 
@@ -163,6 +166,7 @@ void PangolinDSOViewer::run()
 	pangolin::Var<double> settings_mapFps("ui.KF fps",0,0,0,false);
 
 
+
 	// Default hooks for exiting (Esc) and fullscreen (tab).
 	while( !pangolin::ShouldQuit() && running )
 	{
@@ -194,9 +198,9 @@ void PangolinDSOViewer::run()
 
 
 		openImagesMutex.lock();
-		if(videoImgChanged) 	texVideo.Upload(internalVideoImg->data,GL_BGR,GL_UNSIGNED_BYTE);
+//		if(videoImgChanged) 	texVideo.Upload(internalVideoImg->data,GL_BGR,GL_UNSIGNED_BYTE);
 		if(kfImgChanged) 		texKFDepth.Upload(internalKFImg->data,GL_BGR,GL_UNSIGNED_BYTE);
-		if(resImgChanged) 		texResidual.Upload(internalResImg->data,GL_BGR,GL_UNSIGNED_BYTE);
+//		if(resImgChanged) 		texResidual.Upload(internalResImg->data,GL_BGR,GL_UNSIGNED_BYTE);
 		videoImgChanged=kfImgChanged=resImgChanged=false;
 		openImagesMutex.unlock();
 
@@ -220,12 +224,12 @@ void PangolinDSOViewer::run()
 		}
 
 
-		if(setting_render_displayVideo)
-		{
-			d_video.Activate();
-			glColor4f(1.0f,1.0f,1.0f,1.0f);
-			texVideo.RenderToViewportFlipY();
-		}
+//		if(setting_render_displayVideo)
+//		{
+//			d_video.Activate();
+//			glColor4f(1.0f,1.0f,1.0f,1.0f);
+//			texVideo.RenderToViewportFlipY();
+//		}
 
 		if(setting_render_displayDepth)
 		{
@@ -234,15 +238,16 @@ void PangolinDSOViewer::run()
 			texKFDepth.RenderToViewportFlipY();
 		}
 
-		if(setting_render_displayResidual)
-		{
-			d_residual.Activate();
-			glColor4f(1.0f,1.0f,1.0f,1.0f);
-			texResidual.RenderToViewportFlipY();
-		}
+//		if(setting_render_displayResidual)
+//		{
+//			d_residual.Activate();
+//			glColor4f(1.0f,1.0f,1.0f,1.0f);
+//			texResidual.RenderToViewportFlipY();
+//		}
 
 
 	    // update parameters
+
 	    this->settings_pointCloudMode = settings_pointCloudMode.Get();
 
 	    this->settings_showActiveConstraints = settings_showActiveConstraints.Get();
@@ -324,9 +329,9 @@ void PangolinDSOViewer::reset_internal()
 
 
 	openImagesMutex.lock();
-	internalVideoImg->setBlack();
+//	internalVideoImg->setBlack();
 	internalKFImg->setBlack();
-	internalResImg->setBlack();
+//	internalResImg->setBlack();
 	videoImgChanged= kfImgChanged= resImgChanged=true;
 	openImagesMutex.unlock();
 
@@ -432,10 +437,16 @@ void PangolinDSOViewer::publishGraph(const std::map<uint64_t,Eigen::Vector2i> &c
 	{
 		int host = (int)(p.first >> 32);
         int target = (int)(p.first & (uint64_t)0xFFFFFFFF);
+        if (host <0 || target<0)
+        {
+            printf("host:%d, target:%d\n", host, target);
+        }
 
 		assert(host >= 0 && target >= 0);
 		if(host == target)
 		{
+            if (p.second[0] != 0 || p.second[1] != 0)
+                printf("p.second[0]:%d, p.second[1]:%d\n", p.second[0], p.second[1]);
 			assert(p.second[0] == 0 && p.second[1] == 0);
 			continue;
 		}

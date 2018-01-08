@@ -274,8 +274,8 @@ Vec4 FullSystem::trackNewCoarse(FrameHessian* fh)
 	assert(allFrameHistory.size() > 0);
 	// set pose initialization.
 
-    for(IOWrap::Output3DWrapper* ow : outputWrapper)
-        ow->pushLiveFrame(fh);
+//    for(IOWrap::Output3DWrapper* ow : outputWrapper)
+//        ow->pushLiveFrame(fh);
 
 
 
@@ -284,8 +284,12 @@ Vec4 FullSystem::trackNewCoarse(FrameHessian* fh)
 	AffLight aff_last_2_l = AffLight(0,0);
 
 	std::vector<SE3,Eigen::aligned_allocator<SE3>> lastF_2_fh_tries;
+    int basic_tries = 0;
 	if(allFrameHistory.size() == 2)
-		for(unsigned int i=0;i<lastF_2_fh_tries.size();i++) lastF_2_fh_tries.push_back(SE3());
+    {
+        for (unsigned int i = 0; i < lastF_2_fh_tries.size(); i++) lastF_2_fh_tries.push_back(SE3());
+        basic_tries = lastF_2_fh_tries.size();
+    }
 	else
 	{
 		FrameShell* slast = allFrameHistory[allFrameHistory.size()-2];
@@ -302,17 +306,38 @@ Vec4 FullSystem::trackNewCoarse(FrameHessian* fh)
 
 
 		// get last delta-movement.
-		lastF_2_fh_tries.push_back(fh_2_slast.inverse() * lastF_2_slast);	// assume constant motion.
-		lastF_2_fh_tries.push_back(fh_2_slast.inverse() * fh_2_slast.inverse() * lastF_2_slast);	// assume double motion (frame skipped)
-		lastF_2_fh_tries.push_back(SE3::exp(fh_2_slast.log()*0.5).inverse() * lastF_2_slast); // assume half motion.
-		lastF_2_fh_tries.push_back(lastF_2_slast); // assume zero motion.
-		lastF_2_fh_tries.push_back(SE3()); // assume zero motion FROM KF.
+//        if (slast->poseValid && sprelast->poseValid && lastF->shell->poseValid)
+//        {
+        lastF_2_fh_tries.push_back(lastF_2_slast); // assume zero motion.
+            lastF_2_fh_tries.push_back(fh_2_slast.inverse() * lastF_2_slast);    // assume constant motion.
+        lastF_2_fh_tries.push_back(SE3::exp(fh_2_slast.log() * 0.5).inverse() * lastF_2_slast); // assume half motion.
+
+        lastF_2_fh_tries.push_back(fh_2_slast.inverse() * fh_2_slast.inverse() * lastF_2_slast);    // assume double motion (frame skipped)
+			lastF_2_fh_tries.push_back(fh_2_slast.inverse() * lastF_2_slast * lastF_2_slast);    // assume double motion (frame skipped)
+        lastF_2_fh_tries.push_back(fh_2_slast.inverse() * lastF_2_slast * fh_2_slast.inverse() * lastF_2_slast);    // assume double motion (frame skipped)
+
+//        }
+//        if (slast->poseValid && lastF->shell->poseValid)
+//        {
+//            lastF_2_fh_tries.push_back(lastF_2_slast); // assume zero motion.
+//            lastF_2_fh_tries.push_back(SE3::exp(lastF_2_slast.log()*2.0));
+//            lastF_2_fh_tries.push_back(SE3::exp(lastF_2_slast.log()*3.0));
+//            lastF_2_fh_tries.push_back(SE3::exp(lastF_2_slast.log()*4.0));
+ 		lastF_2_fh_tries.push_back(SE3()); // assume zero motion FROM KF.
+//        lastF_2_fh_tries.push_back(SE3(Sophus::Quaterniond(1,0,0,0), Vec3(5.0,0,0)));
+//        lastF_2_fh_tries.push_back(SE3(Sophus::Quaterniond(1,0,0,0), Vec3(0.0,5.0,0)));
+//        lastF_2_fh_tries.push_back(SE3(Sophus::Quaterniond(1,0,0,0), Vec3(0.0,0,5.0)));
+        basic_tries = (int)lastF_2_fh_tries.size();
+//        printf("slast->poseValid:%d, sprelast->poseValid:%d, lastF->shell->poseValid:%d\n",
+//               slast->poseValid, sprelast->poseValid, lastF->shell->poseValid);
 
 
 		// just try a TON of different initializations (all rotations). In the end,
 		// if they don't work they will only be tried on the coarsest level, which is super fast anyway.
 		// also, if tracking rails here we loose, so we really, really want to avoid that.
-        for(float rotDelta=0.02; rotDelta < 0.06; rotDelta+=0.01)
+//        for(float rotDelta=0.02; rotDelta < 0.06; rotDelta+=0.02)
+
+        for(float rotDelta=0.02; rotDelta < 0.08; rotDelta+=0.02)
 ////		for(float rotDelta=0.02; rotDelta < 0.05; rotDelta+=0.01)
 		{
 			lastF_2_fh_tries.push_back(fh_2_slast.inverse() * lastF_2_slast * SE3(Sophus::Quaterniond(1,rotDelta,0,0), Vec3(0,0,0)));			// assume constant motion.
@@ -342,9 +367,38 @@ Vec4 FullSystem::trackNewCoarse(FrameHessian* fh)
 			lastF_2_fh_tries.push_back(fh_2_slast.inverse() * lastF_2_slast * SE3(Sophus::Quaterniond(1,rotDelta,rotDelta,-rotDelta), Vec3(0,0,0)));	// assume constant motion.
 			lastF_2_fh_tries.push_back(fh_2_slast.inverse() * lastF_2_slast * SE3(Sophus::Quaterniond(1,rotDelta,rotDelta,rotDelta), Vec3(0,0,0)));	// assume constant motion.
 		}
+/*
+        for(float trans_multiplier=-0.4; trans_multiplier < 0.4; trans_multiplier += 0.2)
+        {
+			float old_x = lastF_2_slast.translation()[0];
+			float old_y = lastF_2_slast.translation()[1];
+			float old_z = lastF_2_slast.translation()[2];
+//			lastF_2_fh_tries.push_back(SE3(Sophus::Quaterniond(1,0,0,0), Vec3(old_x,old_y,old_z)*5.0));
+//            lastF_2_fh_tries.push_back(SE3(Sophus::Quaterniond(1,0,0,0), Vec3(old_x,old_y,0)*5.0));
+//            lastF_2_fh_tries.push_back(SE3(Sophus::Quaterniond(1,0,0,0), Vec3(old_x,0,old_z)*5.0));
+//            lastF_2_fh_tries.push_back(SE3(Sophus::Quaterniond(1,0,0,0), Vec3(0,old_y,old_z)*5.0));
+//            lastF_2_fh_tries.push_back(SE3(Sophus::Quaterniond(1,0,0,0), Vec3(old_x,0,0)*5.0));
+//            lastF_2_fh_tries.push_back(SE3(Sophus::Quaterniond(1,0,0,0), Vec3(0,old_y,0)*5.0));
+//            lastF_2_fh_tries.push_back(SE3(Sophus::Quaterniond(1,0,0,0), Vec3(0,0,old_z)*5.0));
+//        lastF_2_fh_tries.push_back(SE3(Sophus::Quaterniond(1,0,0,0), Vec3(0.0,5.0,0)));
+//        lastF_2_fh_tries.push_back(SE3(Sophus::Quaterniond(1,0,0,0), Vec3(0.0,0,5.0)));
+            lastF_2_fh_tries.push_back(fh_2_slast.inverse() * lastF_2_slast * SE3(Sophus::Quaterniond(1,0,0,0), Vec3(old_x,0,0)*trans_multiplier));
+            lastF_2_fh_tries.push_back(fh_2_slast.inverse() * lastF_2_slast * SE3(Sophus::Quaterniond(1,0,0,0), Vec3(0,old_y,0)*trans_multiplier));
+            lastF_2_fh_tries.push_back(fh_2_slast.inverse() * lastF_2_slast * SE3(Sophus::Quaterniond(1,0,0,0), Vec3(0,0,old_z)*trans_multiplier));
+            lastF_2_fh_tries.push_back(fh_2_slast.inverse() * lastF_2_slast * SE3(Sophus::Quaterniond(1,0,0,0), Vec3(old_x,old_y,0)*trans_multiplier));
+            lastF_2_fh_tries.push_back(fh_2_slast.inverse() * lastF_2_slast * SE3(Sophus::Quaterniond(1,0,0,0), Vec3(old_x,0,old_z)*trans_multiplier));
+            lastF_2_fh_tries.push_back(fh_2_slast.inverse() * lastF_2_slast * SE3(Sophus::Quaterniond(1,0,0,0), Vec3(0,old_y,old_z)*trans_multiplier));
+            lastF_2_fh_tries.push_back(fh_2_slast.inverse() * lastF_2_slast * SE3(Sophus::Quaterniond(1,0,0,0), lastF_2_slast.translation() * trans_multiplier));
 
-		if(!slast->poseValid || !sprelast->poseValid || !lastF->shell->poseValid)
+
+            lastF_2_fh_tries.push_back(lastF_2_slast * SE3(Sophus::Quaterniond(1,0,0,0), lastF_2_slast.translation() * trans_multiplier));
+            lastF_2_fh_tries.push_back(SE3(Sophus::Quaterniond(1,0,0,0), lastF_2_slast.translation() * trans_multiplier));
+        }
+*/
+        if(!slast->poseValid || !sprelast->poseValid || !lastF->shell->poseValid)
 		{
+            printf("slast->poseValid:%d, sprelast->poseValid:%d, lastF->shell->poseValid:%d\n",
+                   slast->poseValid, sprelast->poseValid, lastF->shell->poseValid);
 			lastF_2_fh_tries.clear();
 			lastF_2_fh_tries.push_back(SE3());
 		}
@@ -374,7 +428,8 @@ Vec4 FullSystem::trackNewCoarse(FrameHessian* fh)
 				achievedRes);	// in each level has to be at least as good as the last try.
 		tryIterations++;
 
-		if(i != 0)
+//		if(i != 0)
+        if (i >= basic_tries)
 		{
 			printf("RE-TRACK ATTEMPT %d with initOption %d and start-lvl %d (ab %f %f): %f %f %f %f %f -> %f %f %f %f %f \n",
 					i,
@@ -425,14 +480,16 @@ Vec4 FullSystem::trackNewCoarse(FrameHessian* fh)
 		flowVecs = Vec3(0,0,0);
 		aff_g2l = aff_last_2_l;
 		lastF_2_fh = lastF_2_fh_tries[0];
-	}
+//        lastF_2_fh = SE3();
+    }
 
 	lastCoarseRMSE = achievedRes;
 
 	// no lock required, as fh is not used anywhere yet.
 	fh->shell->camToTrackingRef = lastF_2_fh.inverse();
 	fh->shell->trackingRef = lastF->shell;
-	fh->shell->aff_g2l = aff_g2l;
+//	fh->shell->aff_g2l = (fabs(aff_g2l.a) > 1 || fabs(aff_g2l.b) > 30) ? AffLight(0, 0) : aff_g2l;
+    fh->shell->aff_g2l = aff_g2l;
 	fh->shell->camToWorld = fh->shell->trackingRef->camToWorld * fh->shell->camToTrackingRef;
 
 
@@ -640,6 +697,7 @@ void FullSystem::activatePointsMT()
 
 //	printf("ACTIVATE: %d. (del %d, notReady %d, marg %d, good %d, marg-skip %d)\n",
 //			(int)toOptimize.size(), immature_deleted, immature_notReady, immature_needMarg, immature_want, immature_margskip);
+//    printf("ACTIVATE: %d.\n", (int)toOptimize.size());
 
 	std::vector<PointHessian*> optimized; optimized.resize(toOptimize.size());
 
@@ -1095,7 +1153,7 @@ void FullSystem::makeKeyFrame( FrameHessian* fh)
 		for(PointHessian* ph : fh1->pointHessians)
 		{
 			PointFrameResidual* r = new PointFrameResidual(ph, fh1, fh);
-			r->setState(ResState::IN);
+//			r->setState(ResState::IN);
 			ph->residuals.push_back(r);
 			ef->insertResidual(r);
 			ph->lastResiduals[1] = ph->lastResiduals[0];
@@ -1200,7 +1258,7 @@ void FullSystem::makeKeyFrame( FrameHessian* fh)
 
     for(IOWrap::Output3DWrapper* ow : outputWrapper)
     {
-        ow->publishGraph(ef->connectivityMap);
+//        ow->publishGraph(ef->connectivityMap);
         ow->publishKeyframes(frameHessians, false, &Hcalib);
     }
 
@@ -1455,12 +1513,33 @@ bool FullSystem::initializeFromPointsWithSortedEnergy(FrameHessian* newFrame)
 		firstFrame->shell->camToWorld = SE3();
 		firstFrame->shell->aff_g2l = AffLight(0,0);
 		firstFrame->setEvalPT_scaled(firstFrame->shell->camToWorld.inverse(),firstFrame->shell->aff_g2l);
+		std::cout << "firstFrame->w2c_leftEps:" << firstFrame->w2c_leftEps().transpose() << std::endl;
 		firstFrame->shell->trackingRef=0;
 		firstFrame->shell->camToTrackingRef = SE3();
 
 		newFrame->shell->camToWorld = firstToNew.inverse();
-		newFrame->shell->aff_g2l = AffLight(0,0);
+        newFrame->shell->aff_g2l = AffLight(0, 0);
+
+//        newFrame->shell->aff_g2l = (fabs(coarseInitializer->thisToNext_aff.a) > 1 ||
+//                                    fabs(coarseInitializer->thisToNext_aff.b) > 30)
+//                                    ? AffLight(0, 0)
+//                                    : AffLight(coarseInitializer->thisToNext_aff.a,
+//                                               coarseInitializer->thisToNext_aff.b);
+
+		printf("coarseInitializer->thisToNext_aff:(%f, %f), newFrame->shell->aff_g2l:(%f, %f)\n",
+			   coarseInitializer->thisToNext_aff.a,
+			   coarseInitializer->thisToNext_aff.b,
+			   newFrame->shell->aff_g2l.a,
+			   newFrame->shell->aff_g2l.b);
+//        printf("firstFrame->ab_exposure:%f, newFrame->ab_exposure:%f)\n",
+//               firstFrame->ab_exposure,
+//               newFrame->ab_exposure);
+//		newFrame->shell->aff_g2l = AffLight(logf(-coarseInitializer->thisToNext_aff.a*firstFrame->ab_exposure/newFrame->ab_exposure),
+//        newFrame->shell->aff_g2l = AffLight(logf(-coarseInitializer->thisToNext_aff.a*firstFrame->ab_exposure/newFrame->ab_exposure),
+//											coarseInitializer->thisToNext_aff.b);
+//        printf("newFrame->shell->aff_g2l:(%.4f, %.4f)\n", newFrame->shell->aff_g2l.a, newFrame->shell->aff_g2l.b);
 		newFrame->setEvalPT_scaled(newFrame->shell->camToWorld.inverse(),newFrame->shell->aff_g2l);
+		std::cout << "newFrame->w2c_leftEps:" << newFrame->w2c_leftEps().transpose() << std::endl;
 		newFrame->shell->trackingRef = firstFrame->shell;
 		newFrame->shell->camToTrackingRef = firstToNew.inverse();
 

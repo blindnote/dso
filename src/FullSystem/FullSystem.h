@@ -209,7 +209,7 @@ private:
 
 	void printOptRes(const Vec3 &res, double resL, double resM, double resPrior, double LExact, float a, float b);
 
-	void debugPlotTracking();
+	void debugPlotTracking(std::string name);
 
 	std::vector<VecX> getNullspaces(
 			std::vector<VecX> &nullspaces_pose,

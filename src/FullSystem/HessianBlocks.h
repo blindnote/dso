@@ -364,12 +364,18 @@ struct CalibHessian
 	{
 		this->value_scaled = value_scaled;
 		this->value_scaledf = this->value_scaled.cast<float>();
+		//       - fx     cx -
+		//  K = |     fy  cy  |
+		//       -         1 -
 		value[0] = SCALE_F_INVERSE * value_scaled[0];
 		value[1] = SCALE_F_INVERSE * value_scaled[1];
 		value[2] = SCALE_C_INVERSE * value_scaled[2];
 		value[3] = SCALE_C_INVERSE * value_scaled[3];
 
 		this->value_minus_value_zero = this->value - this->value_zero;
+		//          - 1/fx            -cx/fx -
+		//  K^-1 = |          1/fy    -cy/fy  |
+		//          -                    1   -
 		this->value_scaledi[0] = 1.0f / this->value_scaledf[0];
 		this->value_scaledi[1] = 1.0f / this->value_scaledf[1];
 		this->value_scaledi[2] = - this->value_scaledf[2] / this->value_scaledf[0];

@@ -148,7 +148,7 @@ namespace
             ofs_imudatum_.open(file_imudatum_, std::ofstream::out);
             ofs_imudatum_ << std::scientific;
 
-            ofs_timestamps_ << "#timestamp[ms]" << std::endl;
+            ofs_timestamps_ << "#seq #timestamp[ms]" << std::endl;
             ofs_imudatum_ << "#timestamp[ms],gyro_x,gyro_y,gyro_z,acc_x,acc_y,acc_z" << std::endl;
         }
 
@@ -165,7 +165,8 @@ namespace
                   uint32_t timestamp, std::vector<mynteye::IMUData> &imudatum)
         {
             std::stringstream ss;
-            ss << std::dec << std::setw(6) << std::setfill('0') << count_++ << ".png";
+//            ss << std::dec << std::setw(6) << std::setfill('0') << count_++ << ".png";
+            ss << std::dec << std::setw(6) << std::setfill('0') << timestamp << ".png";
             std::string filename = ss.str();
 
             std::string path_img_left = dir_img_left_ + PATH_SEPARATOR + filename;
@@ -174,7 +175,8 @@ namespace
             cv::imwrite(path_img_left, left);
             cv::imwrite(path_img_right, right);
 
-            ofs_timestamps_ << timestamp << std::endl;
+            ofs_timestamps_ << std::dec << std::setw(5) << std::setfill('0') << count_++ << " "
+                            << std::dec << std::setw(6) << std::setfill('0') << timestamp << std::endl;
 
             if (imudatum.empty()) return;
 

@@ -197,13 +197,14 @@ private:
             double stamp;
             float exposure = 0;
 
-            if(3 == sscanf(buf, "%d %lf %f", &id, &stamp, &exposure))
-            {
-                timestamps_.push_back(stamp);
-                exposures_.push_back(exposure);
-            }
+//            if(3 == sscanf(buf, "%d %lf %f", &id, &stamp, &exposure))
+//            {
+//                timestamps_.push_back(stamp);
+//                exposures_.push_back(exposure);
+//            }
 
-            else if(2 == sscanf(buf, "%d %lf", &id, &stamp))
+//            else if(2 == sscanf(buf, "%lf %f", &stamp, &exposure))
+            if (2 == sscanf(buf, "%le %f", &stamp, &exposure))
             {
                 timestamps_.push_back(stamp);
                 exposures_.push_back(exposure);

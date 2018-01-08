@@ -333,13 +333,21 @@ private:
 			{
 				timestamps.push_back(stamp);
 				exposures.push_back(exposure);
+//                printf("timestamp:%le, exposure:%f\n", stamp, exposure);
 			}
 
-			else if(2 == sscanf(buf, "%d %lf", &id, &stamp))
+			else if(2 == sscanf(buf, "%le %f", &stamp, &exposure))
 			{
 				timestamps.push_back(stamp);
-				exposures.push_back(exposure);
+				exposures.push_back(0.001 * exposure);  //0.001
+//				printf("timestamp:%f, exposure:%f\n", stamp, 0.001 * exposure);
 			}
+            else if (2 == sscanf(buf, "%lf %f", &stamp, &exposure))
+            {
+                timestamps.push_back(stamp);
+                exposures.push_back(exposure);
+//                printf(">>timestamp:%le, exposure:%f\n", stamp, exposure);
+            }
 		}
 		tr.close();
 
@@ -374,6 +382,7 @@ private:
 			printf("set EXPOSURES to zero!\n");
 			exposures.clear();
 		}
+//        exposures.clear();
 
 		printf("got %d images and %d timestamps and %d exposures.!\n", (int)getNumImages(), (int)timestamps.size(), (int)exposures.size());
 	}

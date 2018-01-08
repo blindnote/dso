@@ -105,6 +105,7 @@ double PointFrameResidual::linearize(CalibHessian* HCalib)
 		float Ku, Kv;
 		Vec3f KliP;
 
+		// 注意此处的投影是用x=0时刻的逆深度值及位姿，便于下面计算几何部分的FEJ
 		if(!projectPoint(point->u, point->v, point->idepth_zero_scaled, 0, 0,HCalib,
 				PRE_RTll_0,PRE_tTll_0, drescale, u, v, Ku, Kv, KliP, new_idepth))
 			{ state_NewState = ResState::OOB; return state_energy; }
@@ -113,13 +114,106 @@ double PointFrameResidual::linearize(CalibHessian* HCalib)
 
 
 		// diff d_idepth
+		// (∂uT/∂u) * (∂u/∂ρH) 投影到target帧上的像素点横坐标对逆深度求导
 		d_d_x = drescale * (PRE_tTll_0[0]-PRE_tTll_0[2]*u)*SCALE_IDEPTH*HCalib->fxl();
+		// (∂vT/∂v) * (∂v/∂ρH) 投影到target帧上的像素点纵坐标对逆深度求导
 		d_d_y = drescale * (PRE_tTll_0[1]-PRE_tTll_0[2]*v)*SCALE_IDEPTH*HCalib->fyl();
 
 
 
 
 		// diff calib
+		// 令 PH = Ki * (1/ρH) * xH, 即像素点xH在host帧中的相机坐标, (u, v, 1.0) 是投影到target帧中归一化的三维坐标
+		//
+		//       -  uT -              -  u  -
+		//      |   vT  | = xT = K * |   v   |    = K * ρT * [ RTH * PH + tTH ]
+		//       - 1.0 -              - 1.0 -
+		//                                        = K * ρT * [ RTH * Ki * (1/ρH) * xH + tTH ]
+		//
+		//                       - fx * u + cx -     - fx * ρT * (r1 * PH + t1) + cx -
+		//                    = |  fy * v + cy  | = |  fy * ρT * (r2 * PH + t2) + cy  |
+		//                       -     1.0     -     -      ρT * (r3 * PH + t2)      -
+		//
+		//                                   1
+		//  u = ρT * (r1 * PH + t1) = ---------------- * (r1 * PH + t1)
+		//                             (r3 * PH + t3)
+		//
+		//                                   1
+		//  v = ρT * (r2 * PH + t2) = ---------------- * (r2 * PH + t2)
+		//                             (r3 * PH + t3)
+		//
+		//                      r3                                   1
+		//  ∂u/∂PH = - ------------------ * (r1 * PH + t1) + ---------------- * r1
+		//              (r3 * PH + t3)^2                      (r3 * PH + t3)
+		//
+		//         = r1 * ρT - r3 * ρT^2 * (r1 * PH + t1)
+		//
+		//         = ρT * [ r1 - r3 * u ]1x3
+		//
+		//                      r3                                   1
+		//  ∂v/∂PH = - ------------------ * (r2 * PH + t2) + ---------------- * r2
+		//              (r3 * PH + t3)^2                      (r3 * PH + t3)
+		//
+		//         = r2 * ρT - r3 * ρT^2 * (r2 * PH + t2)
+		//
+		//         = ρT * [ r2 - r3 * v ]1x3
+		//
+		//
+		//         1     -   uH/fx - cx/fx  -      1     -  KliP[0]  -
+		//  PH = ---- * |    vH/fy - cy/fy   | = ---- * |   KliP[1]   |
+		//        ρH     -        1.0       -     ρH     -    1.0    -
+		//
+		//             1     -   -(1/fx) * (uH/fx - cx/fx)   -
+		// ∂PH/∂fx = ---- * |               0                 |
+		//            ρH     -              0                -3x1
+		//
+		//             1     -              0                -
+		// ∂PH/∂fy = ---- * |    -(1/fy) * (vH/fx - cy/fy)    |
+		//            ρH     -              0                -3x1
+		//
+		//             1     -           -(1/fx)             -
+		// ∂PH/∂cx = ---- * |               0                 |
+		//            ρH     -              0                -3x1
+		//
+		//             1     -              0                -
+		// ∂PH/∂cy = ---- * |            -(1/fy)              |
+		//            ρH     -              0                -3x1
+		//
+		// 因此,
+		//
+		//  ∂uT/∂fx = u + fx * (∂u/∂fx) = u + fx * [(∂u/∂PH)*(∂PH/∂fx)]
+		//          = u + fx * (ρT/ρH) * (r11 - r31 * u) * [ -(1/fx) * (uH/fx - cx/fx) ]
+		//          = u + drescale * (r31 * u - r11) * Klip[0]
+		//
+		//  ∂uT/∂fy = fx * (∂u/∂fy) = fx * [(∂u/∂PH)*(∂PH/∂fy)]
+		//          = fx * (ρT/ρH) * (r12 - r32 * u) * [ -(1/fy) * (vH/fy - cy/fy) ]
+		//          = fx * drescale * (r32 * u - r12) * (1/fy) * Klip[1]
+		//
+		//  ∂uT/∂cx = 1 + fx * (∂u/∂cx) = 1 + fx * [(∂u/∂PH)*(∂PH/∂cx)]
+		//          = 1 + fx * (ρT/ρH) * (r11 - r31 * u) * [ -(1/fx) ]
+		//          = 1 + drescale * (r31 * u - r11)
+		//
+		//  ∂uT/∂cy = fx * (∂u/∂cy) = fx * [(∂u/∂PH)*(∂PH/∂cy)]
+		//          = fx * (ρT/ρH) * (r12 - r32 * u) * [ -(1/fy) ]
+		//          = fx * drescale * (r32 * u - r12) * (1/fy)
+		//
+		//
+		//  ∂vT/∂fx = fy * (∂v/∂fx) = fy * [(∂v/∂PH)*(∂PH/∂fx)]
+		//          = fy * (ρT/ρH) * (r21 - r31 * v) * [ -(1/fx) * (uH/fx - cx/fx) ]
+		//          = fy * drescale * (r31 * v - r21) * Klip[0] * (1/fx)
+		//
+		//  ∂vT/∂fy = v + fy * (∂v/∂fy) = v + fy * [(∂v/∂PH)*(∂PH/∂fy)]
+		//          = v + fy * (ρT/ρH) * (r22 - r32 * v) * [ -(1/fy) * (vH/fy - cy/fy) ]
+		//          = v + drescale * (r32 * v - r22) * Klip[1]
+		//
+		//  ∂vT/∂cx = fy * (∂v/∂cx) = fy * [(∂v/∂PH)*(∂PH/∂cx)]
+		//          = fy * (ρT/ρH) * (r21 - r31 * v) * [ -(1/fx) ]
+		//          = fy * drescale * (r31 * v - r21) * (1/fx)
+		//
+		//  ∂vT/∂cy = 1 + fy * (∂v/∂cy) = 1 + fy * [(∂v/∂PH)*(∂PH/∂cy)]
+		//          = 1 + fy * (ρT/ρH) * (r22 - r32 * v) * [ -(1/fy) ]
+		//          = 1 + drescale * (r32 * v - r22)
+		//
 		d_C_x[2] = drescale*(PRE_RTll_0(2,0)*u-PRE_RTll_0(0,0));
 		d_C_x[3] = HCalib->fxl() * drescale*(PRE_RTll_0(2,1)*u-PRE_RTll_0(0,1)) * HCalib->fyli();
 		d_C_x[0] = KliP[0]*d_C_x[2];
@@ -141,13 +235,14 @@ double PointFrameResidual::linearize(CalibHessian* HCalib)
 		d_C_y[3] = (d_C_y[3]+1)*SCALE_C;
 
 
+		// (∂uT/∂ξ): 投影到target帧上的横坐标分别对李代数的6个项求导
 		d_xi_x[0] = new_idepth*HCalib->fxl();
 		d_xi_x[1] = 0;
 		d_xi_x[2] = -new_idepth*u*HCalib->fxl();
 		d_xi_x[3] = -u*v*HCalib->fxl();
 		d_xi_x[4] = (1+u*u)*HCalib->fxl();
 		d_xi_x[5] = -v*HCalib->fxl();
-
+		// (∂vT/∂ξ): 投影到target帧上的纵坐标分别对李代数的6个项求导
 		d_xi_y[0] = 0;
 		d_xi_y[1] = new_idepth*HCalib->fyl();
 		d_xi_y[2] = -new_idepth*v*HCalib->fyl();
@@ -158,6 +253,7 @@ double PointFrameResidual::linearize(CalibHessian* HCalib)
 
 
 	{
+        // 几何Jacobian仅计算中心点，pattern中其它点都以此为近似
 		J->Jpdxi[0] = d_xi_x;
 		J->Jpdxi[1] = d_xi_y;
 
@@ -183,6 +279,7 @@ double PointFrameResidual::linearize(CalibHessian* HCalib)
 	for(int idx=0;idx<patternNum;idx++)
 	{
 		float Ku, Kv;
+        // 计算image derivative(∂I/xT)用current value
 		if(!projectPoint(point->u+patternP[idx][0], point->v+patternP[idx][1], point->idepth_scaled, PRE_KRKiTll, PRE_KtTll, Ku, Kv))
 			{ state_NewState = ResState::OOB; return state_energy; }
 
@@ -195,7 +292,7 @@ double PointFrameResidual::linearize(CalibHessian* HCalib)
 
 
 
-		float drdA = (color[idx]-b0);
+		float drdA = (color[idx]-b0); // 光度部分也是用x=0时刻来计算FEJ
 		if(!std::isfinite((float)hitColor[0]))
 		{ state_NewState = ResState::OOB; return state_energy; }
 
@@ -215,10 +312,38 @@ double PointFrameResidual::linearize(CalibHessian* HCalib)
 			hitColor[1]*=hw;
 			hitColor[2]*=hw;
 
+            // 此处res尚未乘以J^T
 			J->resF[idx] = residual*hw;
 
 			J->JIdx[0][idx] = hitColor[1];
 			J->JIdx[1][idx] = hitColor[2];
+            // 计算光度部分Jacobian
+            //                           tT * e^aT
+            // r = w * [ (I[xT] - bT) - ----------- * (I[xH] - bH) ]
+            //                           tH * e^aH
+            //           tT * e^aT
+            // 令 aTH = ------------ 为host到target的相对亮度密度变换参数
+            //           tH * e^aH
+            //
+            //               tT * e^aT
+            // (∂r/∂aT) = - ----------- * (I[xH] - bH) * w = -aTH * (I[xH] - bH) * w
+            //               tH * e^aH                             ------- ↓↓ ------
+            //                                                           JabF[0]
+            // (∂r/∂bT) = -1 * 1 * w
+            //                -- ↓ --
+            //                JabF[1]
+            //
+            //             tT * e^aT
+            // (∂r/∂aH) = ----------- * (I[xH] - bH) * w = aTH * (I[xH] - bH) * w
+            //             tH * e^aH                             ------ ↓↓ ------
+            //                                                        JabF[0]
+            //             tT * e^aT
+            // (∂r/∂bH) = ----------- * w = aTH * 1 * w
+            //             tH * e^aH             -- ↓ --
+            //                                   JabF[1]
+            //
+            // 这里代码中的JabF只记录了灰度部分，aTH在adHost和adTarget对角线上光度对应位置有记录
+            //
 			J->JabF[0][idx] = drdA*hw;
 			J->JabF[1][idx] = hw;
 

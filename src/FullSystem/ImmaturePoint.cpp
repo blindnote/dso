@@ -50,6 +50,14 @@ ImmaturePoint::ImmaturePoint(int u_, int v_, FrameHessian* host_, float type, Ca
 
 		gradH += ptc.tail<2>()  * ptc.tail<2>().transpose();
 
+		// gradient-dependent weighting wp
+		//              c^2
+		//   wp = ----------------
+		//         c^2 + |∇I(p)|2
+		//
+		// This weighting function can be probabilistically interpreted as adding small,
+		// independent geometric noise on the projected point position p',
+		// and immediately marginalizing it – approximating small geometric error.
 		weights[idx] = sqrtf(setting_outlierTHSumComponent / (setting_outlierTHSumComponent + ptc.tail<2>().squaredNorm()));
 	}
 
@@ -174,6 +182,7 @@ ImmaturePointStatus ImmaturePoint::traceOn(FrameHessian* frame,const Mat33f &hos
 
 
 	// set OOB if scale change too big.
+//	if(!(idepth_min<0 || (ptpMin[2]>0.1 && ptpMin[2]<2.0)))
 	if(!(idepth_min<0 || (ptpMin[2]>0.75 && ptpMin[2]<1.5)))
 	{
 		if(debugPrint) printf("OOB SCALE %f %f %f!\n", uMax, vMax,  ptpMin[2]);

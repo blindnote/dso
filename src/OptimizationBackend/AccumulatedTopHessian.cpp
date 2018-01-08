@@ -112,6 +112,35 @@ void AccumulatedTopHessianSSE::addPoint(EFPoint* p, EnergyFunctional const * con
 		}
 
 
+		// acc主要是计算相机内参、位姿、光度相关的Hessian参数以及残值部分
+		// 令相机、位姿、光度、深度雅克比分别为C，T，F，D
+		// 则 J = [ C T F D ]
+		// (J^T * W * J) * δx = - J^T * W * r  等价于
+        //
+		//  - C^T -                              - C^T -
+		// |  T^T  | * W * [ C T F D ] * δx = - |  T^T  | * W * r
+		// |  F^T  |                            |  F^T  |
+		//  - D^T -                              - D^T -
+        //
+        // 展开得,
+        //
+		//  - C^T*W*C   C^T*W*T   C^T*W*F   C^T*W*D -     - δXc -       - C^T*W*r -
+		// |  T^T*W*C   T^T*W*T   T^T*W*F   T^T*W*D  | * |  δXξ  | = - |  T^T*W*r  |
+		// |  F^T*W*C   F^T*W*T   F^T*W*F   F^T*W*D  |   |  δXf  |     |  F^T*W*r  |
+		//  - D^T*W*C   D^T*W*T   D^T*W*F   D^T*W*D -     - δXd -       - D^T*W*r -
+        //
+		// acc用一个13x13的矩阵记录了上面等式深度以外的其它部分
+		// 由于对称性，只计算了对角线以上的部分
+		//     .....................    ...................
+        //  - '  C^T*W*C   C^T*W*T  '  ' C^T*W*F | C^T*W*r ' -
+		// |  '     <Data_10x10>    '  '  <TopRight_10x3>  '  |
+		// |  '  T^T*W*C   T^T*W*T  '  ' T^T*W*F | T^T*W*r '  |
+		// |   `````````````````````    ```````````````````   |
+		// |   .....................    ...................   |
+		// |  '  <TopRight^T_3x10>  '  '  <BotRight_3x3>   '  |
+		//  - '                     '  ' F^T*W*F | F^T*W*r ' -
+        //     `````````````````````    ```````````````````
+        //
 		acc[tid][htIDX].update(
 				rJ->Jpdc[0].data(), rJ->Jpdxi[0].data(),
 				rJ->Jpdc[1].data(), rJ->Jpdxi[1].data(),
@@ -130,9 +159,9 @@ void AccumulatedTopHessianSSE::addPoint(EFPoint* p, EnergyFunctional const * con
 
 
 		Vec2f Ji2_Jpdd = rJ->JIdx2 * rJ->Jpdd;
-		bd_acc +=  JI_r[0]*rJ->Jpdd[0] + JI_r[1]*rJ->Jpdd[1];
-		Hdd_acc += Ji2_Jpdd.dot(rJ->Jpdd);
-		Hcd_acc += rJ->Jpdc[0]*Ji2_Jpdd[0] + rJ->Jpdc[1]*Ji2_Jpdd[1];
+		bd_acc +=  JI_r[0]*rJ->Jpdd[0] + JI_r[1]*rJ->Jpdd[1];         // D^T*W*r
+		Hdd_acc += Ji2_Jpdd.dot(rJ->Jpdd);                            // D^T*W*D, i.e. [ JIdx * Jpdd ]^T*[ JIdx * Jpdd ]
+		Hcd_acc += rJ->Jpdc[0]*Ji2_Jpdd[0] + rJ->Jpdc[1]*Ji2_Jpdd[1]; // C^T*W*D, i.e. [ JIdx * Jpdc ]^T*[ JIdx * Jpdd ]
 
 		nres[tid]++;
 	}
@@ -267,6 +296,27 @@ void AccumulatedTopHessianSSE::stitchDoubleInternal(
 			accH += acc[tid2][aidx].H.cast<double>();
 		}
 
+        // 此处H不包含深度部分
+        //       ←←← 4 →→→ ←←←←← 8*Nf →→→→ ←←←←←←←←←← Np →→→→→→→→→→
+        //      |         |				  |                        |
+        //      4         |               |        xxxxxxx         |
+        //      |         |               |                        |
+        //      |---------+---------------+------------------------|
+        //      |         |				  |                        |
+        //      |         |				  |                        |
+		//     8*Nf       |				  |        xxxxxxx         |
+		//      |         |				  |                        |
+		// H =  |         |				  |                        |
+		//      |---------+---------------+------------------------|
+		//      |         |				  |                        |
+        //      |         |				  |                        |
+		//      |	      |               |                        |
+		//      Np  xxx   |	   xxxxxxx    |        xxxxxxx         |
+		//      |         |				  |                        |
+        //      |         |				  |                        |
+		//      |         |				  |                        |
+		//       ---------+---------------+------------------------
+        //
 		H[tid].block<8,8>(hIdx, hIdx).noalias() += EF->adHost[aidx] * accH.block<8,8>(CPARS,CPARS) * EF->adHost[aidx].transpose();
 
 		H[tid].block<8,8>(tIdx, tIdx).noalias() += EF->adTarget[aidx] * accH.block<8,8>(CPARS,CPARS) * EF->adTarget[aidx].transpose();
@@ -291,6 +341,7 @@ void AccumulatedTopHessianSSE::stitchDoubleInternal(
 	// only do this on one thread.
 	if(min==0 && usePrior)
 	{
+        // total energy to minimize: E(ΔX) = Σ|ri(X0+ΔX)|h + Σ(λa*ai^2+λb*bi^2)
 		H[tid].diagonal().head<CPARS>() += EF->cPrior;
 		b[tid].head<CPARS>() += EF->cPrior.cwiseProduct(EF->cDeltaF.cast<double>());
 		for(int h=0;h<nframes[tid];h++)

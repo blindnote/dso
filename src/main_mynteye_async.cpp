@@ -323,10 +323,11 @@ int main(int argc, char** argv)
     setting_affineOptModeA = 0; //-1: fix. >=0: optimize (with prior, if > 0).
     setting_affineOptModeB = 0; //-1: fix. >=0: optimize (with prior, if > 0).
 
-    setting_maxShiftWeightT= 0.04f * (752+480);
-    setting_maxShiftWeightR= 0.0f * (752+480);
+    setting_maxShiftWeightT= 0.02f * (752+480);
+    setting_maxShiftWeightR= 0.01f * (640+480);
     setting_maxShiftWeightRT= 0.02f * (752+480);
 
+    setting_hw_multiplier = 2.0;
 
     undistorter = Undistort::getUndistorterForFile(calib, gammaFile, vignetteFile, opencvFile);
 
@@ -408,13 +409,14 @@ int main(int argc, char** argv)
 
                 MinimalImageB minImgB(image.cols, image.rows, (unsigned char*)image.data);
 //                  ImageAndExposure* undistImg = undistorter->undistort<unsigned char>(&minImgB, 1.0);
-                ImageAndExposure* undistImg = undistorter->undistort_opencv<unsigned char>(&minImgB, elapse*0.001);
+                float exposure_sec =  (fullSystem->initialized) ? elapse*0.001 : 1.0;
+                ImageAndExposure* undistImg = undistorter->undistort_opencv<unsigned char>(&minImgB, exposure_sec);
 
                 fullSystem->addActiveFrame(undistImg, frameID);
                 delete undistImg;
 
                 struct timeval tv_end; gettimeofday(&tv_end, NULL);
-                printf("%u us: frameID:%u\n", (tv_end.tv_usec - tv_start.tv_usec), frameID);
+//                printf("%u us: frameID:%u\n", (tv_end.tv_usec - tv_start.tv_usec), frameID);
 
                 if (fullSystem->initFailed)
                 {

@@ -360,6 +360,10 @@ void CoarseTracker::calcGSSSE(int lvl, Mat88 &H_out, Vec8 &b_out, const SE3 &ref
 	H_out.block<3,8>(3,0) *= SCALE_XI_ROT;
 	H_out.block<1,8>(6,0) *= SCALE_A;
 	H_out.block<1,8>(7,0) *= SCALE_B;
+//	H_out.block<8,3>(0,0) *= SCALE_XI_TRANS;
+//	H_out.block<8,3>(0,3) *= SCALE_XI_ROT;
+//	H_out.block<8,1>(0,6) *= SCALE_A;
+//	H_out.block<8,1>(0,7) *= SCALE_B;
 //	b_out.segment<3>(0) *= SCALE_XI_ROT;
 //	b_out.segment<3>(3) *= SCALE_XI_TRANS;
 	b_out.segment<3>(0) *= SCALE_XI_TRANS;
@@ -721,11 +725,17 @@ bool CoarseTracker::trackNewestCoarse(
 	|| (setting_affineOptModeB != 0 && (fabsf(aff_g2l_out.b) > 200)))
 		return false;
 
+//    if(fabsf(aff_g2l_out.a) > 1.2 || fabsf(aff_g2l_out.b) > 50)
+//        return false;
+
 	Vec2f relAff = AffLight::fromToVecExposure(lastRef->ab_exposure, newFrame->ab_exposure, lastRef_aff_g2l, aff_g2l_out).cast<float>();
 
-	if((setting_affineOptModeA == 0 && (fabsf(logf((float)relAff[0])) > 1.5))
-	|| (setting_affineOptModeB == 0 && (fabsf((float)relAff[1]) > 200)))
-		return false;
+//	if((setting_affineOptModeA == 0 && (fabsf(logf((float)relAff[0])) > 1.5))
+//	|| (setting_affineOptModeB == 0 && (fabsf((float)relAff[1]) > 200)))
+//		return false;
+    if((setting_affineOptModeA == 0 && (fabsf(logf((float)relAff[0])) > 1.5))
+       || (setting_affineOptModeB == 0 && (fabsf((float)relAff[1]) > 50)))
+        return false;
 
 
 
@@ -822,8 +832,9 @@ void CoarseTracker::debugPlotIDepthMap(float* minID_pt, float* maxID_pt, std::ve
 					//mf.at(idx) = makeJet3B(id);
 				}
 			}
-        //IOWrap::displayImage("coarseDepth LVL0", &mf, false);
-
+#ifdef NOGUI_DEBUG
+        IOWrap::displayImage("coarseDepth LVL0", &mf, false);
+#endif
 
         for(IOWrap::Output3DWrapper* ow : wraps)
             ow->pushDepthImage(&mf);

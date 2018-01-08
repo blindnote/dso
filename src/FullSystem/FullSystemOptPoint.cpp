@@ -108,7 +108,8 @@ PointHessian* FullSystem::optimizeImmaturePoint(
 		for(int i=0;i<nres;i++)
 			newEnergy += point->linearizeResidual(&Hcalib, 1, residuals+i,newHdd, newbd, newIdepth);
 
-		if(!std::isfinite(lastEnergy) || newHdd < setting_minIdepthH_act)
+		if(!std::isfinite(newEnergy) || newHdd < setting_minIdepthH_act)
+//		if(!std::isfinite(lastEnergy) || newHdd < setting_minIdepthH_act)
 		{
 			if(print) printf("OptPoint: Not well-constrained (%d res, H=%.1f). E=%f. SKIP!\n",
 					nres,

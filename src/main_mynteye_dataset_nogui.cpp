@@ -27,6 +27,7 @@
 #include "IOWrapper/Pangolin/PangolinDSOViewer.h"
 #include "IOWrapper/OutputWrapper/SampleOutputWrapper.h"
 
+#define NOGUI_DEBUG
 
 using namespace std;
 using namespace dso;
@@ -41,7 +42,6 @@ std::string opencv_calib = "";
 
 int start_seq =1;
 int end_seq = -1;
-bool reverse_seq = false;
 //int end=100000;
 float playbackSpeed=0;	// 0 for linearize (play as fast as possible, while sequentializing tracking & mapping). otherwise, factor on timestamps.
 
@@ -258,17 +258,6 @@ void parse_argument(char* arg)
         return;
     }
 
-    if(1==sscanf(arg,"rev=%d",&option))
-    {
-        if(option==1)
-        {
-            reverse_seq = true;
-            printf("Reverse images!\n");
-        }
-        return;
-    }
-
-
     printf("could not parse argument \"%s\"!!!!\n", arg);
 }
 
@@ -284,26 +273,24 @@ int main( int argc, char** argv )
     // hook crtl+C.
     boost::thread exThread = boost::thread(exitThread);
 
-    setting_solverMode = SOLVER_FIX_LAMBDA | SOLVER_ORTHOGONALIZE_X_LATER;
-//    setting_solverModeDelta = 1e-3;
-//    setting_maxPixSearch = 0.036;
-//    setting_trace_slackInterval = 3;
+    setting_render_plotTrackingFull = true;
+    setting_render_displayCoarseTrackingFull = true;
+
+//    setting_solverMode = SOLVER_FIX_LAMBDA | SOLVER_ORTHOGONALIZE_X_LATER;
 
 //    setting_trace_GNIterations = 4;
 //    setting_forceAceptStep = false;
 
-
     setting_photometricCalibration = 0;
     setting_affineOptModeA = 0; //-1: fix. >=0: optimize (with prior, if > 0).
-    setting_affineOptModeB = 0; //-1: fix. >=0: optimize (with prior, if > 0).
+    setting_affineOptModeB = -1; //-1: fix. >=0: optimize (with prior, if > 0).
 
-//    setting_kfGlobalWeight = 1.6;
+//    setting_kfGlobalWeight = 1.0;
     setting_maxShiftWeightT= 0.02f * (752+480);
     setting_maxShiftWeightR= 0.01f * (640+480);
     setting_maxShiftWeightRT= 0.02f * (752+480);
 
-    setting_hw_multiplier = 2.0;
-//    setting_solverModeDelta = 0.001;
+    setting_hw_multiplier = 1.0;
 
     ImageFolderReader* reader = new ImageFolderReader(source, calib, gamma_calib, vignette, opencv_calib);
     reader->setGlobalCalibration();
@@ -323,30 +310,29 @@ int main( int argc, char** argv )
 
 
 
-    IOWrap::PangolinDSOViewer* viewer = 0;
-    if(!disableAllDisplay)
-    {
-        viewer = new IOWrap::PangolinDSOViewer(wG[0],hG[0], false);
-        fullSystem->outputWrapper.push_back(viewer);
-    }
+//    IOWrap::PangolinDSOViewer* viewer = 0;
+//    if(!disableAllDisplay)
+//    {
+//        viewer = new IOWrap::PangolinDSOViewer(wG[0],hG[0], false);
+//        fullSystem->outputWrapper.push_back(viewer);
+//    }
 
 
 
-    std::thread runthread([&]() {
-        int last = (end_seq == -1) ? (reader->getNumImages()-1) : end_seq;
-        for(auto i = (!reverse_seq ? start_seq : last); (!reverse_seq ? i <= last : i >= start_seq); (!reverse_seq ? i++ : i--))
+//    std::thread runthread([&]() {
+        int last = (end_seq == -1) ? reader->getNumImages() : end_seq;
+        for(auto i = start_seq; i < last; i++)
         {
             ImageAndExposure* img = reader->getImage_OpenCV(i);
 //            ImageAndExposure* img = reader->getImage(i);
-            if (!(fullSystem->initialized)) img->exposure_time = 1.0;
 
-            fullSystem->addActiveFrame(img, !reverse_seq ? i : last-i);
+            fullSystem->addActiveFrame(img, i);
 
             delete img;
 
             if (fullSystem->initFailed)
             {
-//                printf("Init Failed:start_seq:%d, i:%d!!\n", start_seq, i);
+                printf("Init Failed:start_seq:%d, i:%d!!\n", start_seq, i);
                 break;
 //                if (i - start_seq > 30)
 //                    break;
@@ -372,20 +358,20 @@ int main( int argc, char** argv )
             }
         }
 
-        fullSystem->blockUntilMappingIsFinished();
-    });
+//        fullSystem->blockUntilMappingIsFinished();
+//    });
 
 
-    if(viewer != 0)
-        viewer->run();
-
-    runthread.join();
-
-    for(IOWrap::Output3DWrapper* ow : fullSystem->outputWrapper)
-    {
-        ow->join();
-        delete ow;
-    }
+//    if(viewer != 0)
+//        viewer->run();
+//
+//    runthread.join();
+//
+//    for(IOWrap::Output3DWrapper* ow : fullSystem->outputWrapper)
+//    {
+//        ow->join();
+//        delete ow;
+//    }
 
 
     printf("DELETE FULLSYSTEM!\n");

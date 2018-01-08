@@ -726,10 +726,10 @@ void EnergyFunctional::orthogonalize(VecX* b, MatXX* H)
 	std::vector<VecX> ns;
 	ns.insert(ns.end(), lastNullspaces_pose.begin(), lastNullspaces_pose.end());
 	ns.insert(ns.end(), lastNullspaces_scale.begin(), lastNullspaces_scale.end());
-//	if(setting_affineOptModeA <= 0)
-//		ns.insert(ns.end(), lastNullspaces_affA.begin(), lastNullspaces_affA.end());
-//	if(setting_affineOptModeB <= 0)
-//		ns.insert(ns.end(), lastNullspaces_affB.begin(), lastNullspaces_affB.end());
+    if(setting_affineOptModeA <= 0)
+        ns.insert(ns.end(), lastNullspaces_affA.begin(), lastNullspaces_affA.end());
+    if(setting_affineOptModeB <= 0)
+        ns.insert(ns.end(), lastNullspaces_affB.begin(), lastNullspaces_affB.end());
 
 
 
@@ -737,6 +737,7 @@ void EnergyFunctional::orthogonalize(VecX* b, MatXX* H)
 
 	// make Nullspaces matrix
 	MatXX N(ns[0].rows(), ns.size());
+//    printf("========== ns.size():%d\n", ns.size());
 	for(unsigned int i=0;i<ns.size();i++)
 		N.col(i) = ns[i].normalized();
 
@@ -746,12 +747,19 @@ void EnergyFunctional::orthogonalize(VecX* b, MatXX* H)
 	Eigen::JacobiSVD<MatXX> svdNN(N, Eigen::ComputeThinU | Eigen::ComputeThinV);
 
 	VecX SNN = svdNN.singularValues();
+    // 奇异值分解的几何含义为：对于任何的一个矩阵，我们要找到一组两两正交单位向量序列，
+    // 使得矩阵作用在此向量序列上后得到新的向量序列保持两两正交.
+    // 奇异值的几何含义为：这组变换后的新的向量序列的长度。
 	double minSv = 1e10, maxSv = 0;
 	for(int i=0;i<SNN.size();i++)
 	{
 		if(SNN[i] < minSv) minSv = SNN[i];
 		if(SNN[i] > maxSv) maxSv = SNN[i];
 	}
+    // https://www.zhihu.com/question/22237507
+    // 奇异值往往对应着矩阵中隐含的重要信息，且重要性和奇异值大小正相关。
+    // 每个矩阵A都可以表示为一系列秩为1的“小矩阵”之和，而奇异值则衡量了这些“小矩阵”对于A的权重
+    // 那些较小的奇异值就是由于噪声引起的。当我们强行令这些较小的奇异值为0时，就可以去除噪声
 	for(int i=0;i<SNN.size();i++)
 		{ if(SNN[i] > setting_solverModeDelta*maxSv) SNN[i] = 1.0 / SNN[i]; else SNN[i] = 0; }
 
@@ -897,7 +905,9 @@ void EnergyFunctional::solveSystemF(int iteration, double lambda, CalibHessian* 
 	if((setting_solverMode & SOLVER_ORTHOGONALIZE_X) || (iteration >= 2 && (setting_solverMode & SOLVER_ORTHOGONALIZE_X_LATER)))
 	{
 		VecX xOld = x;
+//        std::cout << "before orthogonize: x=" << std::endl << x << std::endl;
 		orthogonalize(&x, 0);
+//        std::cout << "after orthogonize: x=" << std::endl << x << std::endl;
 	}
 
 

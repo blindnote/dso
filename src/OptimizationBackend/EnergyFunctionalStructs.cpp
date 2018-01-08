@@ -78,6 +78,8 @@ void EFFrame::takeData()
 
 void EFPoint::takeData()
 {
+	Hdd_accAF = 0.0;
+	Hdd_accLF = 0.0;
 	priorF = data->hasDepthPrior ? setting_idepthFixPrior*SCALE_IDEPTH*SCALE_IDEPTH : 0;
 	if(setting_solverMode & SOLVER_REMOVE_POSEPRIOR) priorF=0;
 

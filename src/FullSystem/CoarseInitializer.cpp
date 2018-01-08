@@ -80,8 +80,8 @@ namespace dso {
     bool CoarseInitializer::trackFrame(FrameHessian *newFrameHessian, std::vector<IOWrap::Output3DWrapper *> &wraps) {
         newFrame = newFrameHessian;
 
-        for (IOWrap::Output3DWrapper *ow : wraps)
-            ow->pushLiveFrame(newFrameHessian);
+//        for (IOWrap::Output3DWrapper *ow : wraps)
+//            ow->pushLiveFrame(newFrameHessian);
 
         int maxIterations[] = {5, 5, 10, 30, 50};
 
@@ -273,13 +273,13 @@ namespace dso {
             snappedAt = frameID;
 
 
-        printf("snapped(%s) && frameID(%d) > snappedAt(%d)+5 = %s\n",
+        printf("snapped(%s) && frameID(%d) > snappedAt(%d)+1 = %s\n",
                snapped ? "true" : "false", frameID, snappedAt,
-               (snapped && frameID > snappedAt + 5) ? "true" : "false");
+               (snapped && frameID > snappedAt + 1) ? "true" : "false");
         debugPlot(0, wraps);
 
 
-        return snapped && frameID > snappedAt + 5;
+        return snapped && frameID > snappedAt + 1;
     }
 
     void CoarseInitializer::debugPlot(int lvl, std::vector<IOWrap::Output3DWrapper *> &wraps) {
@@ -308,7 +308,7 @@ namespace dso {
                 sid += point->iR;
             }
         }
-        printf("lvl_%d: good:%.2f\n", lvl, nid);
+//        printf("lvl_%d: good:%.1f, sid:%.2f, fac:%.2f\n", lvl, nid, sid, (nid/sid));
         float fac = nid / sid;
 
 
@@ -318,8 +318,10 @@ namespace dso {
             if (!point->isGood)
                 iRImg.setPixel9(point->u + 0.5f, point->v + 0.5f, Vec3b(0, 0, 0));
 
-            else
+            else {
                 iRImg.setPixel9(point->u + 0.5f, point->v + 0.5f, makeRainbow3B(point->iR * fac));
+//                printf("pnt[%d] iR=%.2f, iR*fac=%.2f\n", i, point->iR, point->iR * fac);
+            }
         }
 
 
@@ -388,7 +390,8 @@ namespace dso {
                 int dy = patternP[idx][1];
 
 
-                // 逆深度 ρT = 1/dT, ρH = 1/dH, 像素坐标 xH = (uH, vH, 1.0), xT = (uT, vT, 1.0)t
+                // 逆深度 ρT = 1/dT, ρH = 1/dH, 像素坐标 xH = (uH, vH, 1.0)t, xT = (uT, vT, 1.0)t
+                // 注: K*[uT, vT, 1/ρT]t <=> K*(1/ρT)*[uT, vT, 1.0]t
                 // 令 PT = (XT, YT, ZT)t 为投影点在target相机坐标系中的三维坐标，
                 // i.e. PT = (XT, YT, ZT)t = [ RTH * Ki * (1/ρH) * xH + tTH ]
                 //                         = (1/ρH) * [ RTH * Ki * xH + tTH * ρH ]
@@ -453,7 +456,7 @@ namespace dso {
                 energy += hw * residual * residual * (2 - hw);
 
 
-                // 残值表达式: r = I(xT) - a * I(xH) - b
+                // 残值表达式: r = I(xT) - e^a * I(xH) - b
                 // Jacobian求解:
                 //   1. 图像雅可比: ∂I(xT)/∂xT
                 //   2. 几何雅可比, 投影像素坐标相对于相机位姿及点的逆深度变化率: ∂xT/∂(δξ), ∂xT/∂ρH
@@ -532,7 +535,7 @@ namespace dso {
                 //            = [ dx, dy ]1x2
                 //
                 // (三) 光度部分
-                // ∂r/∂a = -a * I(xH)    --- ⑪
+                // ∂r/∂a = -e^a * I(xH)  --- ⑪
                 // ∂r/∂b = -1            --- ⑫
                 //
                 //
@@ -560,7 +563,7 @@ namespace dso {
                 //                                     |   	  -dx*fx*v + dy*fy*u		|     --- ⑩
                 //                                      -                       	   -1x6
                 //
-                //												   | (∂uT/∂v) * (∂u/∂ρH) |
+                //												   | (∂uT/∂u) * (∂u/∂ρH) |
                 // 最后1项 i.e. ∂I(xT)/∂xT * ∂xT/∂ρH = ∂I(xT)/∂xT * | (∂vT/∂v) * (∂v/∂ρH) |
                 //                                               | fx * ((tTH[0] - tTH[2]*u) / pt[2]) |
                 //                                   = [dx dy] * |  			   			 	      |		--- ⑬
@@ -747,16 +750,18 @@ namespace dso {
             point->lastHessian_new = JbBuffer_new[i][9];
 
             JbBuffer_new[i][8] += alphaOpt * (point->idepth_new - 1);
+//            JbBuffer_new[i][8] += alphaOpt * (point->idepth - 1);
             JbBuffer_new[i][9] += alphaOpt;
 
 
             if (alphaOpt == 0) {
                 JbBuffer_new[i][8] += couplingWeight * (point->idepth_new - point->iR);
+//                JbBuffer_new[i][8] += couplingWeight * (point->idepth - point->iR);
                 JbBuffer_new[i][9] += couplingWeight;
             }
 
             JbBuffer_new[i][9] = 1 / (1 + JbBuffer_new[i][9]);
-//		JbBuffer_new[i][9] = 1/(JbBuffer_new[i][9]);
+//		    JbBuffer_new[i][9] = 1/(JbBuffer_new[i][9]);
             acc9SC.updateSingleWeighted(
                     (float) JbBuffer_new[i][0], (float) JbBuffer_new[i][1], (float) JbBuffer_new[i][2],
                     (float) JbBuffer_new[i][3],
@@ -1006,7 +1011,6 @@ namespace dso {
 
 
                         pl[nl].outlierTH = patternNum * setting_outlierTH;
-
 
                         nl++;
                         assert(nl <= npts);

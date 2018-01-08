@@ -49,7 +49,7 @@ namespace dso
 {
 
 
-	void FullSystem::debugPlotTracking()
+	void FullSystem::debugPlotTracking(std::string name)
 	{
 		if(disableAllDisplay) return;
 		if(!setting_render_plotTrackingFull) return;
@@ -96,7 +96,7 @@ namespace dso
 
 
 			char buf[100];
-			snprintf(buf, 100, "IMG %d", idx);
+			snprintf(buf, 100, "%s IMG %d", name.c_str(), idx);
 			IOWrap::displayImageStitch(buf, images);
 			idx++;
 		}
@@ -312,7 +312,7 @@ namespace dso
 			}
 		}
 		IOWrap::displayImageStitch(name.c_str(), images);
-		IOWrap::waitKey(5);
+		IOWrap::waitKey(0);
 
 		for(unsigned int i=0;i<images.size();i++)
 			delete images[i];

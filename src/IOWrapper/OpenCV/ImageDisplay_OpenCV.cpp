@@ -61,6 +61,7 @@ void displayImage(const char* windowName, const cv::Mat& image, bool autoSize)
 		}
 	}
 	cv::imshow(windowName, image);
+	cv::waitKey(0);
 }
 
 
@@ -73,7 +74,8 @@ void displayImageStitch(const char* windowName, const std::vector<cv::Mat*> imag
 	int w = images[0]->cols;
 	int h = images[0]->rows;
 
-	int num = std::max((int)setting_maxFrames, (int)images.size());
+//	int num = std::max((int)setting_maxFrames, (int)images.size());
+    int num = (int)images.size();
 
 	// get optimal dimensions.
 	int bestCC = 0;
